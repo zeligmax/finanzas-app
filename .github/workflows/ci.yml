@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install backend deps
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run tests
+        run: |
+          cd backend
+          pytest -q
+
+  build-image:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: |
+          docker build -t finanzas-backend:latest ./backend
+      - name: Save Docker image as artifact
+        run: |
+          docker save finanzas-backend:latest -o finanzas-backend.tar
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: finanzas-backend-image
+          path: finanzas-backend.tar
+
+# Optional deployment step (example for GitHub Container Registry / Render):
+# - Configure secrets in the repo (GHCR_TOKEN, REGISTRY, RENDER_SERVICE_ID, RENDER_API_KEY)
+# - Use docker/build-push-action to push image and call provider API to trigger deploy.

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, NavLink } from "react-router-dom";
 import TaxesPage from "./pages/TaxesPage";
 import RentaPage from "./pages/RentaPage";
 import DocumentsPage from "./pages/DocumentsPage";
@@ -19,22 +19,40 @@ export default function App() {
 
   const handleLogout = () => setToken(null);
 
+  const navClass = ({ isActive }) => (isActive ? "active" : undefined);
+
   return (
     <BrowserRouter>
-      <div style={{ padding: 20, fontFamily: "Arial, sans-serif" }}>
-        <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="app">
+        <header className="app-header">
           <h1>
             <Link to="/">Finanzas Autónomo</Link>
           </h1>
-          <nav>
-            <Link to="/">Inicio</Link> | <Link to="/documents">Documentos</Link> |{" "}
-            <Link to="/taxes">Impuestos</Link> | <Link to="/renta">Renta</Link> |{" "}
-            <Link to="/login">Login</Link>
-            {token && <button style={{ marginLeft: 8 }} onClick={handleLogout}>Cerrar sesión</button>}
+          <nav className="nav">
+            <NavLink to="/" className={navClass}>
+              Inicio
+            </NavLink>
+            <NavLink to="/documents" className={navClass}>
+              Documentos
+            </NavLink>
+            <NavLink to="/taxes" className={navClass}>
+              Impuestos
+            </NavLink>
+            <NavLink to="/renta" className={navClass}>
+              Renta
+            </NavLink>
+            <NavLink to="/login" className={navClass}>
+              Login
+            </NavLink>
+            {token && (
+              <button className="secondary" onClick={handleLogout}>
+                Cerrar sesión
+              </button>
+            )}
           </nav>
         </header>
 
-        <main style={{ marginTop: 20 }}>
+        <main>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/documents" element={token ? <DocumentsPage /> : <Login onLogin={setToken} />} />

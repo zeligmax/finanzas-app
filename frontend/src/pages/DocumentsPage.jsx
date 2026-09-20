@@ -30,8 +30,8 @@ const emptyExpense = {
 
 function Field({ label, children }) {
   return (
-    <div style={{ marginBottom: 10 }}>
-      <label style={{ display: "block", fontSize: 13, marginBottom: 2 }}>{label}</label>
+    <div className="field">
+      <label>{label}</label>
       {children}
     </div>
   );
@@ -65,7 +65,7 @@ function InvoiceForm({ onCreated }) {
   };
 
   return (
-    <form onSubmit={submit} style={{ maxWidth: 480 }}>
+    <form onSubmit={submit} className="card" style={{ maxWidth: 480 }}>
       <Field label="Número de factura">
         <input value={form.numero} onChange={set("numero")} required />
       </Field>
@@ -100,7 +100,7 @@ function InvoiceForm({ onCreated }) {
       <button type="submit" disabled={saving}>
         {saving ? "Guardando..." : "Añadir ingreso"}
       </button>
-      {error && <p style={{ color: "crimson" }}>Error: {String(error)}</p>}
+      {error && <p className="error">Error: {String(error)}</p>}
     </form>
   );
 }
@@ -133,7 +133,7 @@ function ExpenseForm({ onCreated }) {
   };
 
   return (
-    <form onSubmit={submit} style={{ maxWidth: 480 }}>
+    <form onSubmit={submit} className="card" style={{ maxWidth: 480 }}>
       <Field label="Número de factura">
         <input value={form.numero_factura} onChange={set("numero_factura")} />
       </Field>
@@ -172,34 +172,32 @@ function ExpenseForm({ onCreated }) {
       <button type="submit" disabled={saving}>
         {saving ? "Guardando..." : "Añadir gasto"}
       </button>
-      {error && <p style={{ color: "crimson" }}>Error: {String(error)}</p>}
+      {error && <p className="error">Error: {String(error)}</p>}
     </form>
   );
 }
 
 function InvoiceList({ items }) {
-  if (!items.length) return <p>Todavía no hay ingresos registrados.</p>;
+  if (!items.length) return <p className="muted">Todavía no hay ingresos registrados.</p>;
   return (
-    <table style={{ borderCollapse: "collapse", width: "100%" }}>
+    <table>
       <thead>
         <tr>
           {["Nº factura", "Fecha", "Pagador", "Base", "IVA %", "IRPF %", "Total"].map((h) => (
-            <th key={h} style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: 4 }}>
-              {h}
-            </th>
+            <th key={h}>{h}</th>
           ))}
         </tr>
       </thead>
       <tbody>
         {items.map((f) => (
           <tr key={f.id}>
-            <td style={{ padding: 4 }}>{f.numero}</td>
-            <td style={{ padding: 4 }}>{f.fecha}</td>
-            <td style={{ padding: 4 }}>{f.cliente_nombre}</td>
-            <td style={{ padding: 4 }}>{f.base_imponible.toFixed(2)} €</td>
-            <td style={{ padding: 4 }}>{f.tipo_iva}%</td>
-            <td style={{ padding: 4 }}>{f.retencion_irpf_pct}%</td>
-            <td style={{ padding: 4 }}>{f.total.toFixed(2)} €</td>
+            <td>{f.numero}</td>
+            <td>{f.fecha}</td>
+            <td>{f.cliente_nombre}</td>
+            <td>{f.base_imponible.toFixed(2)} €</td>
+            <td>{f.tipo_iva}%</td>
+            <td>{f.retencion_irpf_pct}%</td>
+            <td>{f.total.toFixed(2)} €</td>
           </tr>
         ))}
       </tbody>
@@ -208,28 +206,26 @@ function InvoiceList({ items }) {
 }
 
 function ExpenseList({ items }) {
-  if (!items.length) return <p>Todavía no hay gastos registrados.</p>;
+  if (!items.length) return <p className="muted">Todavía no hay gastos registrados.</p>;
   return (
-    <table style={{ borderCollapse: "collapse", width: "100%" }}>
+    <table>
       <thead>
         <tr>
           {["Nº factura", "Fecha", "Cobrador", "Categoría", "Base", "IVA %", "IRPF %"].map((h) => (
-            <th key={h} style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: 4 }}>
-              {h}
-            </th>
+            <th key={h}>{h}</th>
           ))}
         </tr>
       </thead>
       <tbody>
         {items.map((g) => (
           <tr key={g.id}>
-            <td style={{ padding: 4 }}>{g.numero_factura}</td>
-            <td style={{ padding: 4 }}>{g.fecha}</td>
-            <td style={{ padding: 4 }}>{g.proveedor_nombre}</td>
-            <td style={{ padding: 4 }}>{g.categoria}</td>
-            <td style={{ padding: 4 }}>{g.base_imponible.toFixed(2)} €</td>
-            <td style={{ padding: 4 }}>{g.tipo_iva}%</td>
-            <td style={{ padding: 4 }}>{g.retencion_irpf_pct}%</td>
+            <td>{g.numero_factura}</td>
+            <td>{g.fecha}</td>
+            <td>{g.proveedor_nombre}</td>
+            <td>{g.categoria}</td>
+            <td>{g.base_imponible.toFixed(2)} €</td>
+            <td>{g.tipo_iva}%</td>
+            <td>{g.retencion_irpf_pct}%</td>
           </tr>
         ))}
       </tbody>
@@ -254,42 +250,32 @@ export default function DocumentsPage() {
 
   useEffect(load, []);
 
-  const tabStyle = (name) => ({
-    padding: "6px 12px",
-    cursor: "pointer",
-    border: "1px solid #ccc",
-    borderBottom: tab === name ? "2px solid #333" : "1px solid #ccc",
-    background: tab === name ? "#f0f0f0" : "white",
-  });
-
   return (
     <div>
       <h1>Documentos</h1>
-      {error && <p style={{ color: "crimson" }}>Error: {String(error)}</p>}
+      {error && <p className="error">Error: {String(error)}</p>}
 
-      <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
-        <div style={tabStyle("ingreso")} onClick={() => setTab("ingreso")}>
+      <div className="tabs">
+        <div className={`tab ${tab === "ingreso" ? "active" : ""}`} onClick={() => setTab("ingreso")}>
           Ingreso (factura emitida)
         </div>
-        <div style={tabStyle("gasto")} onClick={() => setTab("gasto")}>
+        <div className={`tab ${tab === "gasto" ? "active" : ""}`} onClick={() => setTab("gasto")}>
           Gasto (factura recibida)
         </div>
       </div>
 
       {tab === "ingreso" ? <InvoiceForm onCreated={load} /> : <ExpenseForm onCreated={load} />}
 
-      <hr style={{ margin: "24px 0" }} />
-
       {tab === "ingreso" ? (
-        <>
+        <section className="card">
           <h2>Ingresos registrados</h2>
           <InvoiceList items={invoices} />
-        </>
+        </section>
       ) : (
-        <>
+        <section className="card">
           <h2>Gastos registrados</h2>
           <ExpenseList items={expenses} />
-        </>
+        </section>
       )}
     </div>
   );

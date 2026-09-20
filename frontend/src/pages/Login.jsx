@@ -27,28 +27,24 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div style={{ maxWidth: 480 }}>
+    <div className="card" style={{ maxWidth: 420 }}>
       <h2>Iniciar sesión</h2>
       <form onSubmit={submit}>
-        <div style={{ marginBottom: 8 }}>
+        <div className="field">
           <label>Correo</label>
-          <br />
           <input value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
 
-        <div style={{ marginBottom: 8 }}>
+        <div className="field">
           <label>Contraseña</label>
-          <br />
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
 
         <button type="submit">Entrar</button>
-        {error && (
-          <p style={{ color: "crimson" }}>Error: {String(error)}</p>
-        )}
+        {error && <p className="error">Error: {String(error)}</p>}
       </form>
 
-      <p style={{ marginTop: 12 }}>
+      <p className="muted" style={{ marginTop: 12 }}>
         Si no tienes usuario, crea uno en la base de datos o usa las pruebas del backend.
       </p>
     </div>

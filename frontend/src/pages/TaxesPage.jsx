@@ -30,18 +30,18 @@ export default function TaxesPage() {
     <div>
       <h1>Impuestos</h1>
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20 }}>
-        <label>
-          Año{" "}
+      <div className="card row">
+        <label className="field" style={{ marginBottom: 0 }}>
+          Año
           <input
             type="number"
             value={anio}
             onChange={(e) => setAnio(parseInt(e.target.value, 10) || anioActual)}
-            style={{ width: 80 }}
+            style={{ width: 90 }}
           />
         </label>
-        <label>
-          Trimestre{" "}
+        <label className="field" style={{ marginBottom: 0 }}>
+          Trimestre
           <select value={trimestre} onChange={(e) => setTrimestre(parseInt(e.target.value, 10))}>
             {[1, 2, 3, 4].map((t) => (
               <option key={t} value={t}>
@@ -52,12 +52,12 @@ export default function TaxesPage() {
         </label>
       </div>
 
-      {error && <p style={{ color: "crimson" }}>Error: {String(error)}</p>}
-      {!error && (!iva || !modelo130) && <p>Cargando...</p>}
+      {error && <p className="error">Error: {String(error)}</p>}
+      {!error && (!iva || !modelo130) && <p className="muted">Cargando...</p>}
 
       {iva && modelo130 && (
         <>
-          <section>
+          <section className="card">
             <h2>IVA (modelo 303)</h2>
             <p>IVA devengado: {iva.iva_devengado.toFixed(2)} €</p>
             <p>Prorrata: {iva.prorrata_pct.toFixed(0)}%</p>
@@ -69,7 +69,7 @@ export default function TaxesPage() {
             </p>
           </section>
 
-          <section>
+          <section className="card">
             <h2>IRPF · pago fraccionado (modelo 130)</h2>
             <p>Rendimiento neto del trimestre: {modelo130.rendimiento_neto_trimestre.toFixed(2)} €</p>
             <p>Rendimiento neto acumulado en el año: {modelo130.rendimiento_neto_acumulado.toFixed(2)} €</p>

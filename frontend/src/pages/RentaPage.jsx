@@ -27,53 +27,51 @@ export default function RentaPage() {
     <div>
       <h1>Renta</h1>
 
-      <div style={{ marginBottom: 20 }}>
-        <label>
-          Año{" "}
+      <div className="card">
+        <label className="field" style={{ marginBottom: 0 }}>
+          Año
           <input
             type="number"
             value={anio}
             onChange={(e) => setAnio(parseInt(e.target.value, 10) || anioActual)}
-            style={{ width: 80 }}
+            style={{ width: 90 }}
           />
         </label>
       </div>
 
-      {error && <p style={{ color: "crimson" }}>Error: {String(error)}</p>}
-      {!error && (!modelos130 || !renta) && <p>Cargando...</p>}
+      {error && <p className="error">Error: {String(error)}</p>}
+      {!error && (!modelos130 || !renta) && <p className="muted">Cargando...</p>}
 
       {modelos130 && (
-        <section>
+        <section className="card">
           <h2>Modelo 130 · pagos fraccionados del año</h2>
-          <table style={{ borderCollapse: "collapse", width: "100%", marginBottom: 12 }}>
+          <table>
             <thead>
               <tr>
                 {["Trimestre", "Rendimiento neto trim.", "Acumulado", "Resultado ingresado"].map((h) => (
-                  <th key={h} style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: 4 }}>
-                    {h}
-                  </th>
+                  <th key={h}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {modelos130.map((m) => (
                 <tr key={m.trimestre}>
-                  <td style={{ padding: 4 }}>T{m.trimestre}</td>
-                  <td style={{ padding: 4 }}>{m.rendimiento_neto_trimestre.toFixed(2)} €</td>
-                  <td style={{ padding: 4 }}>{m.rendimiento_neto_acumulado.toFixed(2)} €</td>
-                  <td style={{ padding: 4 }}>{m.resultado.toFixed(2)} €</td>
+                  <td>T{m.trimestre}</td>
+                  <td>{m.rendimiento_neto_trimestre.toFixed(2)} €</td>
+                  <td>{m.rendimiento_neto_acumulado.toFixed(2)} €</td>
+                  <td>{m.resultado.toFixed(2)} €</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p>
+          <p style={{ marginTop: 12 }}>
             <strong>Total pagos fraccionados ingresados en el año: {totalPagosFraccionados.toFixed(2)} €</strong>
           </p>
         </section>
       )}
 
       {renta && (
-        <section>
+        <section className="card">
           <h2>Modelo 100 · declaración anual (estimación)</h2>
           <p>Base liquidable: {renta.base_liquidable.toFixed(2)} €</p>
           <p>Cuota íntegra: {renta.cuota_integra.toFixed(2)} €</p>

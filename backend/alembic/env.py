@@ -18,10 +18,11 @@ if config.config_file_name is not None:
 # for example:
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import settings
 from app.db.session import Base
+from app.models import models  # noqa: F401  (registra las tablas en Base.metadata)
 
 target_metadata = Base.metadata
 

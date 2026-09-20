@@ -36,8 +36,14 @@ class Invoice(Base):
 
     numero = Column(String, nullable=False)
     fecha = Column(Date, nullable=False, default=date.today)
+
+    # Pagador: quien paga la factura (el cliente)
     cliente_nombre = Column(String, nullable=False)
     cliente_nif = Column(String, nullable=True)
+
+    # Cobrador: quien la emite y cobra (el propio autónomo/empresa)
+    emisor_nombre = Column(String, nullable=False)
+    emisor_nif = Column(String, nullable=True)
 
     base_imponible = Column(Float, nullable=False, default=0.0)
     tipo_iva = Column(Float, nullable=False, default=21.0)  # 0 si está exenta
@@ -73,13 +79,23 @@ class Expense(Base):
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     fecha = Column(Date, nullable=False, default=date.today)
+    numero_factura = Column(String, nullable=True)
+
+    # Cobrador: quien emite la factura y cobra (el proveedor)
     proveedor_nombre = Column(String, nullable=False)
     proveedor_nif = Column(String, nullable=True)
+
+    # Pagador: quien la paga (el propio autónomo/empresa)
+    pagador_nombre = Column(String, nullable=True)
+    pagador_nif = Column(String, nullable=True)
+
     categoria = Column(String, nullable=False)  # ej. "suministros", "software", "dietas"
 
     base_imponible = Column(Float, nullable=False, default=0.0)
     tipo_iva = Column(Float, nullable=False, default=21.0)
     iva_deducible = Column(Boolean, default=True)
+
+    retencion_irpf_pct = Column(Float, nullable=False, default=0.0)  # IRPF que retiene el proveedor, si aplica
 
     pagado = Column(Boolean, default=False)
     fecha_pago = Column(Date, nullable=True)
@@ -89,3 +105,7 @@ class Expense(Base):
     @property
     def cuota_iva(self) -> float:
         return self.base_imponible * self.tipo_iva / 100
+
+    @property
+    def retencion_importe(self) -> float:
+        return self.base_imponible * self.retencion_irpf_pct / 100

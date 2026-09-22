@@ -221,6 +221,35 @@ Extensiones recomendadas: Python, Pylance, ESLint, Prettier.
   herramienta para que tú veas sus datos desde dentro — cada endpoint
   filtra siempre por su propio usuario.
 
+### 4. Despliegue continuo (auto-deploy)
+
+Sí, por defecto ambos están conectados directamente a tu repo de GitHub y
+se despliegan solos en cada `push` a la rama que usaste para conectar
+(normalmente `main`):
+
+- **Railway**: detecta el nuevo commit, reconstruye la imagen Docker y la
+  despliega. Como el `Dockerfile` ejecuta `alembic upgrade head` antes de
+  arrancar, si en el futuro añades una migración nueva (una columna, una
+  tabla...) se aplicará sola a la base de datos de Railway en cada
+  redeploy — no tienes que hacer nada manual para eso.
+- **Vercel**: detecta el commit, corre `npm run build` en `frontend/` con
+  las variables de entorno que ya configuraste, y publica el resultado.
+  Cada push a `main` es un "Production Deployment"; si haces push a otra
+  rama o abres un Pull Request, Vercel también crea una **Preview
+  Deployment** con una URL distinta (útil para probar cambios antes de que
+  lleguen a la URL que usan tus amigos).
+
+Dos cosas a vigilar cuando actualices:
+
+1. Si cambias algo en `models/models.py`, tienes que generar la migración
+   de Alembic **antes** de hacer push (`alembic revision --autogenerate`)
+   y comprobarla en local — Railway solo aplica las migraciones que ya
+   existen en el repo, no las genera por ti.
+2. Puedes desactivar el auto-deploy en cualquiera de los dos si algún día
+   quieres controlar manualmente cuándo sale un cambio (en Railway:
+   Settings → Source, hay un toggle de "Auto Deploy"; en Vercel: Settings →
+   Git).
+
 ## Próximos pasos sugeridos
 
 1. Editar y borrar facturas/gastos (hoy solo se pueden crear y listar).

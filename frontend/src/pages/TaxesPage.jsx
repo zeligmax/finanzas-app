@@ -77,6 +77,34 @@ export default function TaxesPage() {
               <strong>A ingresar: {modelo130.resultado.toFixed(2)} €</strong>
             </p>
           </section>
+
+          <section className="card">
+            <h2>Cómputo total de impuestos a abonar</h2>
+            <table>
+              <tbody>
+                <tr>
+                  <td>IVA (modelo 303)</td>
+                  <td>{iva.resultado.toFixed(2)} €</td>
+                </tr>
+                <tr>
+                  <td>IRPF (modelo 130)</td>
+                  <td>{modelo130.resultado.toFixed(2)} €</td>
+                </tr>
+              </tbody>
+            </table>
+            <p style={{ marginTop: 12 }}>
+              <strong>
+                Total: {(iva.resultado + modelo130.resultado).toFixed(2)} € (
+                {iva.resultado + modelo130.resultado >= 0 ? "a ingresar" : "a favor / a compensar"})
+              </strong>
+            </p>
+            {iva.resultado + modelo130.resultado < 0 && (
+              <p className="muted">
+                Un IVA negativo no se cobra en el momento: se compensa en trimestres posteriores (o se solicita su
+                devolución en el cuarto trimestre).
+              </p>
+            )}
+          </section>
         </>
       )}
     </div>

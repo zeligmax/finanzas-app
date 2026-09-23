@@ -7,21 +7,29 @@ export default function RentaPage() {
   const [anio, setAnio] = useState(anioActual);
   const [modelos130, setModelos130] = useState(null);
   const [renta, setRenta] = useState(null);
+  const [ivaAnual, setIvaAnual] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     setError(null);
     setModelos130(null);
     setRenta(null);
-    Promise.all([api.get(`/api/taxes/modelo130/${anio}`), api.get(`/api/taxes/renta/${anio}`)])
-      .then(([m130Res, rentaRes]) => {
+    setIvaAnual(null);
+    Promise.all([
+      api.get(`/api/taxes/modelo130/${anio}`),
+      api.get(`/api/taxes/renta/${anio}`),
+      ...[1, 2, 3, 4].map((t) => api.get(`/api/taxes/iva/${anio}/${t}`)),
+    ])
+      .then(([m130Res, rentaRes, ...ivaRes]) => {
         setModelos130(m130Res.data);
         setRenta(rentaRes.data);
+        setIvaAnual(ivaRes.reduce((acc, r) => acc + r.data.resultado, 0));
       })
       .catch((err) => setError(err.response?.data?.detail || err.message));
   }, [anio]);
 
   const totalPagosFraccionados = modelos130 ? modelos130.reduce((acc, m) => acc + m.resultado, 0) : 0;
+  const totalAnual = renta && ivaAnual !== null ? ivaAnual + totalPagosFraccionados + renta.resultado : 0;
 
   return (
     <div>
@@ -80,6 +88,39 @@ export default function RentaPage() {
               Resultado: {renta.resultado.toFixed(2)} € ({renta.a_pagar ? "a pagar" : "a devolver"})
             </strong>
           </p>
+        </section>
+      )}
+
+      {renta && ivaAnual !== null && (
+        <section className="card">
+          <h2>Cómputo total de impuestos del año</h2>
+          <table>
+            <tbody>
+              <tr>
+                <td>IVA (suma de los 4 modelos 303)</td>
+                <td>{ivaAnual.toFixed(2)} €</td>
+              </tr>
+              <tr>
+                <td>IRPF ya ingresado (suma de los 4 modelos 130)</td>
+                <td>{totalPagosFraccionados.toFixed(2)} €</td>
+              </tr>
+              <tr>
+                <td>Declaración de la Renta (modelo 100)</td>
+                <td>{renta.resultado.toFixed(2)} €</td>
+              </tr>
+            </tbody>
+          </table>
+          <p style={{ marginTop: 12 }}>
+            <strong>
+              Total: {totalAnual.toFixed(2)} € ({totalAnual >= 0 ? "a abonar" : "a favor / a compensar"})
+            </strong>
+          </p>
+          {totalAnual < 0 && (
+            <p className="muted">
+              Un IVA negativo se compensa en trimestres posteriores o se solicita su devolución en el cuarto
+              trimestre; no se cobra automáticamente.
+            </p>
+          )}
         </section>
       )}
     </div>

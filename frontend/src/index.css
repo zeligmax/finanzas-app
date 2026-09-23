@@ -207,6 +207,19 @@ tbody tr:hover {
   color: var(--color-danger);
 }
 
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .warning {
   display: block;
   margin-top: 4px;

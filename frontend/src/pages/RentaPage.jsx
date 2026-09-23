@@ -1,35 +1,11 @@
-import { useEffect, useState } from "react";
-import api from "../api/client";
+import { useState } from "react";
+import useResumenAnual from "../hooks/useResumenAnual";
 
 const anioActual = new Date().getFullYear();
 
 export default function RentaPage() {
   const [anio, setAnio] = useState(anioActual);
-  const [modelos130, setModelos130] = useState(null);
-  const [renta, setRenta] = useState(null);
-  const [ivaAnual, setIvaAnual] = useState(null);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    setError(null);
-    setModelos130(null);
-    setRenta(null);
-    setIvaAnual(null);
-    Promise.all([
-      api.get(`/api/taxes/modelo130/${anio}`),
-      api.get(`/api/taxes/renta/${anio}`),
-      ...[1, 2, 3, 4].map((t) => api.get(`/api/taxes/iva/${anio}/${t}`)),
-    ])
-      .then(([m130Res, rentaRes, ...ivaRes]) => {
-        setModelos130(m130Res.data);
-        setRenta(rentaRes.data);
-        setIvaAnual(ivaRes.reduce((acc, r) => acc + r.data.resultado, 0));
-      })
-      .catch((err) => setError(err.response?.data?.detail || err.message));
-  }, [anio]);
-
-  const totalPagosFraccionados = modelos130 ? modelos130.reduce((acc, m) => acc + m.resultado, 0) : 0;
-  const totalAnual = renta && ivaAnual !== null ? ivaAnual + totalPagosFraccionados + renta.resultado : 0;
+  const { modelos130, renta, ivaAnual, totalPagosFraccionados, totalAnual, error } = useResumenAnual(anio);
 
   return (
     <div>

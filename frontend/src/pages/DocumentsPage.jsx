@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
+import { nifAviso } from "../utils/nif";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -28,11 +29,12 @@ const emptyExpense = {
   retencion_irpf_pct: 0,
 };
 
-function Field({ label, children }) {
+function Field({ label, warning, children }) {
   return (
     <div className="field">
       <label>{label}</label>
       {children}
+      {warning && <small className="warning">{warning}</small>}
     </div>
   );
 }
@@ -76,14 +78,14 @@ function InvoiceForm({ onCreated }) {
       <Field label="Nombre pagador (cliente)">
         <input value={form.cliente_nombre} onChange={set("cliente_nombre")} required />
       </Field>
-      <Field label="NIF pagador">
+      <Field label="NIF/CIF pagador" warning={nifAviso(form.cliente_nif)}>
         <input value={form.cliente_nif} onChange={set("cliente_nif")} />
       </Field>
 
       <Field label="Nombre cobrador (emisor)">
         <input value={form.emisor_nombre} onChange={set("emisor_nombre")} required />
       </Field>
-      <Field label="NIF cobrador">
+      <Field label="NIF/CIF cobrador" warning={nifAviso(form.emisor_nif)}>
         <input value={form.emisor_nif} onChange={set("emisor_nif")} />
       </Field>
 
@@ -144,14 +146,14 @@ function ExpenseForm({ onCreated }) {
       <Field label="Nombre cobrador (proveedor)">
         <input value={form.proveedor_nombre} onChange={set("proveedor_nombre")} required />
       </Field>
-      <Field label="NIF cobrador">
+      <Field label="NIF/CIF cobrador" warning={nifAviso(form.proveedor_nif)}>
         <input value={form.proveedor_nif} onChange={set("proveedor_nif")} />
       </Field>
 
       <Field label="Nombre pagador">
         <input value={form.pagador_nombre} onChange={set("pagador_nombre")} />
       </Field>
-      <Field label="NIF pagador">
+      <Field label="NIF/CIF pagador" warning={nifAviso(form.pagador_nif)}>
         <input value={form.pagador_nif} onChange={set("pagador_nif")} />
       </Field>
 

@@ -206,3 +206,10 @@ tbody tr:hover {
 .error {
   color: var(--color-danger);
 }
+
+.warning {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #b45309;
+}

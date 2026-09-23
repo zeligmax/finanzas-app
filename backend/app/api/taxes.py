@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_db_user, get_current_user
 from app.db.session import get_db
 from app.models.models import Expense, Invoice, User
 from app.services.tax_calculator import (
@@ -91,17 +91,21 @@ def iva_trimestral(
         compras_base=compras_deducibles,
         tipo_iva_compras=tipo_medio_compras,
     )
-    return resultado
+    return {**asdict(resultado), "a_ingresar": resultado.a_ingresar}
 
 
 def _modelo130_acumulado(
-    db: Session, owner_id, anio: int, hasta_trimestre: int
+    db: Session, owner: User, anio: int, hasta_trimestre: int
 ) -> list[tuple[int, ResultadoModelo130]]:
     """
     Calcula el modelo 130 de cada trimestre desde el 1 hasta `hasta_trimestre`,
     encadenando los acumulados reales (rendimiento neto, retenciones y pagos
     fraccionados ya ingresados) trimestre a trimestre.
+
+    La cuota de autónomos (3 mensualidades por trimestre) cuenta como gasto deducible.
     """
+    owner_id = owner.id
+    cuota_autonomos_trimestre = owner.cuota_autonomos_mensual * 3
     resultados: list[tuple[int, ResultadoModelo130]] = []
     rendimiento_neto_acumulado = 0.0
     retenciones_acumuladas = 0.0
@@ -112,7 +116,7 @@ def _modelo130_acumulado(
         gastos = _gastos_trimestre(db, owner_id, anio, trimestre)
 
         ingresos = sum(f.base_imponible for f in facturas)
-        gastos_total = sum(g.base_imponible for g in gastos)
+        gastos_total = sum(g.base_imponible for g in gastos) + cuota_autonomos_trimestre
         retenciones_trimestre = sum(f.retencion_importe for f in facturas)
 
         resultado = calcular_modelo_130(
@@ -137,11 +141,10 @@ def modelo_130(
     anio: int,
     trimestre: int,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    owner: User = Depends(get_current_db_user),
 ):
     _validar_trimestre(trimestre)
-    owner_id = _owner_id(db, user)
-    resultados = _modelo130_acumulado(db, owner_id, anio, trimestre)
+    resultados = _modelo130_acumulado(db, owner, anio, trimestre)
     return resultados[-1][1]
 
 
@@ -149,11 +152,10 @@ def modelo_130(
 def modelo_130_anual(
     anio: int,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    owner: User = Depends(get_current_db_user),
 ):
     """Los 4 modelos 130 del año, encadenados con sus acumulados reales."""
-    owner_id = _owner_id(db, user)
-    resultados = _modelo130_acumulado(db, owner_id, anio, 4)
+    resultados = _modelo130_acumulado(db, owner, anio, 4)
     return [{"trimestre": t, **asdict(r)} for t, r in resultados]
 
 
@@ -161,9 +163,9 @@ def modelo_130_anual(
 def renta_anual(
     anio: int,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    owner: User = Depends(get_current_db_user),
 ):
-    owner_id = _owner_id(db, user)
+    owner_id = owner.id
     facturas = (
         db.query(Invoice)
         .filter(Invoice.owner_id == owner_id, extract("year", Invoice.fecha) == anio)
@@ -180,12 +182,13 @@ def renta_anual(
     retenciones = sum(f.retencion_importe for f in facturas)
 
     pagos_fraccionados_anuales = sum(
-        r.resultado for _, r in _modelo130_acumulado(db, owner_id, anio, 4)
+        r.resultado for _, r in _modelo130_acumulado(db, owner, anio, 4)
     )
 
     resultado = calcular_renta_anual(
         rendimiento_neto_anual=ingresos - gastos_total,
         retenciones_anuales=retenciones,
         pagos_fraccionados_anuales=pagos_fraccionados_anuales,
+        cuota_autonomos_anual=owner.cuota_autonomos_mensual * 12,
     )
-    return resultado
+    return {**asdict(resultado), "a_pagar": resultado.a_pagar}

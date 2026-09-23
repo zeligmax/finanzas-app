@@ -22,6 +22,8 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     full_name = Column(String, nullable=True)
+    nif = Column(String, nullable=True)
+    cuota_autonomos_mensual = Column(Float, nullable=False, default=0.0, server_default="0")
     role = Column(Enum(RoleEnum), default=RoleEnum.team, nullable=False)
     is_active = Column(Boolean, default=True)
 

@@ -111,16 +111,62 @@ def calcular_modelo_130(
 # IRPF anual - estimación declaración de la Renta (modelo 100)
 # ---------------------------------------------------------------------------
 
-# Escala orientativa combinada (estatal + autonómica media). Ajustar según
-# comunidad autónoma del usuario para una estimación más precisa.
-TRAMOS_IRPF = [
-    (12450, 0.19),
-    (20200, 0.24),
-    (35200, 0.30),
-    (60000, 0.37),
-    (300000, 0.45),
-    (float("inf"), 0.47),
+INF = float("inf")
+
+# Escala estatal (igual para todas las comunidades de régimen común).
+ESCALA_ESTATAL = [
+    (12450, 0.095),
+    (20200, 0.12),
+    (35200, 0.15),
+    (60000, 0.185),
+    (300000, 0.225),
+    (INF, 0.245),
 ]
+
+# Escalas autonómicas (tramo superior del intervalo, tipo autonómico) de las
+# comunidades más caras, ejercicio 2026. Se suman a la estatal sobre la misma
+# base. El resto de comunidades (Andalucía, Galicia, Murcia, Castilla-La Mancha,
+# Madrid, Castilla y León...) quedan por debajo de esta envolvente. No incluye
+# Navarra ni País Vasco (régimen foral). Actualizar cada año.
+ESCALAS_AUTONOMICAS = {
+    "Comunidad Valenciana": [
+        (12000, 0.088), (22000, 0.117), (32000, 0.146), (42000, 0.17),
+        (52000, 0.194), (62000, 0.219), (72000, 0.244), (100000, 0.261),
+        (150000, 0.2735), (200000, 0.2835), (INF, 0.2935),
+    ],
+    "Cataluña": [
+        (12500, 0.095), (22000, 0.125), (33000, 0.16), (53000, 0.19),
+        (90000, 0.215), (120000, 0.235), (175000, 0.245), (INF, 0.255),
+    ],
+    "Asturias": [
+        (12450, 0.09), (17707, 0.12), (33007, 0.14), (53407, 0.192),
+        (70000, 0.215), (90000, 0.225), (175000, 0.25), (INF, 0.26),
+    ],
+    "La Rioja": [
+        (12450, 0.08), (20200, 0.106), (35200, 0.136), (40000, 0.178),
+        (50000, 0.183), (60000, 0.19), (120000, 0.245), (INF, 0.27),
+    ],
+    "Aragón": [
+        (13073, 0.095), (21210, 0.12), (36960, 0.15), (52500, 0.185),
+        (60000, 0.205), (80000, 0.23), (90000, 0.24), (130000, 0.25), (INF, 0.255),
+    ],
+    "Canarias": [
+        (13748, 0.09), (19422, 0.115), (35924, 0.14), (57566, 0.185),
+        (93268, 0.235), (123745, 0.25), (INF, 0.26),
+    ],
+    "Extremadura": [
+        (12450, 0.0775), (20200, 0.0975), (24200, 0.16), (35200, 0.175),
+        (60000, 0.21), (80200, 0.235), (99200, 0.24), (120200, 0.245), (INF, 0.25),
+    ],
+    "Baleares": [
+        (10000, 0.09), (18000, 0.1125), (30000, 0.1425), (48000, 0.175),
+        (70000, 0.19), (90000, 0.2175), (120000, 0.2275), (175000, 0.2375), (INF, 0.2475),
+    ],
+    "Cantabria": [
+        (13000, 0.085), (21000, 0.11), (35200, 0.145), (60000, 0.18),
+        (90000, 0.225), (INF, 0.245),
+    ],
+}
 
 MINIMO_PERSONAL_DEFAULT = 5550.0
 
@@ -130,16 +176,22 @@ class ResultadoRentaAnual:
     base_liquidable: float
     cuota_integra: float
     resultado: float  # positivo = a pagar, negativo = a devolver
+    rendimiento_neto_tras_cuota: float = 0.0
+    cuota_autonomos_anual: float = 0.0
+    tipo_medio_pct: float = 0.0  # cuota íntegra / rendimiento neto tras cuota de autónomos
+    comunidad_referencia: str = ""  # comunidad cuya escala da el peor caso
+    cuota_sobre_base: float = 0.0  # impuesto de la base, antes del mínimo personal
+    reduccion_minimo_personal: float = 0.0  # impuesto correspondiente al mínimo personal
 
     @property
     def a_pagar(self) -> bool:
         return self.resultado >= 0
 
 
-def _cuota_progresiva(base: float) -> float:
+def _cuota_progresiva(base: float, tramos: list) -> float:
     cuota = 0.0
     anterior = 0.0
-    for limite, tipo in TRAMOS_IRPF:
+    for limite, tipo in tramos:
         if base > anterior:
             tramo_base = min(base, limite) - anterior
             cuota += tramo_base * tipo
@@ -149,23 +201,60 @@ def _cuota_progresiva(base: float) -> float:
     return cuota
 
 
+def cuota_irpf_peor_caso(base: float, minimo_personal: float = 0.0) -> tuple[float, float, float, str]:
+    """
+    Cuota íntegra de la comunidad más cara para esa base.
+
+    El mínimo personal no se resta de la base: se calcula el impuesto de la base
+    y se descuenta el impuesto que corresponde al mínimo (misma escala).
+
+    Devuelve (cuota_sobre_base, reduccion_minimo_personal, cuota_integra, comunidad).
+    """
+    if base <= 0:
+        return 0.0, 0.0, 0.0, ""
+
+    minimo = min(minimo_personal, base)
+    mejor = (0.0, 0.0, 0.0, "")
+    for comunidad, tramos in ESCALAS_AUTONOMICAS.items():
+        cuota_base = _cuota_progresiva(base, ESCALA_ESTATAL) + _cuota_progresiva(base, tramos)
+        reduccion = _cuota_progresiva(minimo, ESCALA_ESTATAL) + _cuota_progresiva(minimo, tramos)
+        cuota_integra = cuota_base - reduccion
+        if cuota_integra > mejor[2]:
+            mejor = (cuota_base, reduccion, cuota_integra, comunidad)
+    return mejor
+
+
 def calcular_renta_anual(
     rendimiento_neto_anual: float,
     retenciones_anuales: float,
     pagos_fraccionados_anuales: float,
     minimo_personal: float = MINIMO_PERSONAL_DEFAULT,
+    cuota_autonomos_anual: float = 0.0,
 ) -> ResultadoRentaAnual:
     """
-    rendimiento_neto_anual: suma de los 4 trimestres (ingresos - gastos deducibles)
+    rendimiento_neto_anual: ingresos - gastos deducibles del año, antes de la cuota de autónomos
     retenciones_anuales: total de retenciones soportadas en el año
     pagos_fraccionados_anuales: suma de los 4 modelos 130 ingresados
+    cuota_autonomos_anual: cotización a la Seguridad Social del año (gasto deducible)
+
+    La cuota se calcula con la escala de la comunidad autónoma más cara (peor caso).
     """
-    base_liquidable = max(rendimiento_neto_anual - minimo_personal, 0.0)
-    cuota_integra = _cuota_progresiva(base_liquidable)
+    rendimiento_tras_cuota = rendimiento_neto_anual - cuota_autonomos_anual
+    base_liquidable = max(rendimiento_tras_cuota, 0.0)
+    cuota_base, reduccion_minimo, cuota_integra, comunidad = cuota_irpf_peor_caso(
+        base_liquidable, minimo_personal
+    )
     resultado = cuota_integra - retenciones_anuales - pagos_fraccionados_anuales
+    tipo_medio = cuota_integra / rendimiento_tras_cuota * 100 if rendimiento_tras_cuota > 0 else 0.0
 
     return ResultadoRentaAnual(
         base_liquidable=base_liquidable,
         cuota_integra=cuota_integra,
         resultado=resultado,
+        rendimiento_neto_tras_cuota=rendimiento_tras_cuota,
+        cuota_autonomos_anual=cuota_autonomos_anual,
+        tipo_medio_pct=tipo_medio,
+        comunidad_referencia=comunidad,
+        cuota_sobre_base=cuota_base,
+        reduccion_minimo_personal=reduccion_minimo,
     )

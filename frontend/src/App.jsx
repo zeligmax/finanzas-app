@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link, NavLink } from "react-router-dom";
 import TaxesPage from "./pages/TaxesPage";
 import RentaPage from "./pages/RentaPage";
 import DocumentsPage from "./pages/DocumentsPage";
+import UserPage from "./pages/UserPage";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 
@@ -41,6 +42,9 @@ export default function App() {
             <NavLink to="/renta" className={navClass}>
               Renta
             </NavLink>
+            <NavLink to="/usuario" className={navClass}>
+              Usuario
+            </NavLink>
             <NavLink to="/login" className={navClass}>
               Login
             </NavLink>
@@ -58,6 +62,7 @@ export default function App() {
             <Route path="/documents" element={token ? <DocumentsPage /> : <Login onLogin={setToken} />} />
             <Route path="/taxes" element={token ? <TaxesPage /> : <Login onLogin={setToken} />} />
             <Route path="/renta" element={token ? <RentaPage /> : <Login onLogin={setToken} />} />
+            <Route path="/usuario" element={token ? <UserPage /> : <Login onLogin={setToken} />} />
             <Route path="/login" element={<Login onLogin={setToken} />} />
           </Routes>
         </main>

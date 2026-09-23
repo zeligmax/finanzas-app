@@ -27,6 +27,17 @@ anual) para autónomos en España.
    el valor por defecto, y migraciones de Alembic que se ejecutan solas al
    arrancar el contenedor (antes no había ninguna migración generada).
 
+6. **Validación de NIF/CIF y cómputos totales**: aviso (sin bloquear) si un
+   NIF/CIF/NIE no supera el dígito de control, tarjeta "Cómputo total de
+   impuestos" en Impuestos y Renta, y caja lateral de resumen de la Renta en
+   Impuestos.
+7. **Usuario y IRPF en el peor caso**: sección Usuario (nombre, NIF/CIF y
+   cuota de autónomos mensual). Renta descuenta la cuota de autónomos y
+   calcula el IRPF con la escala de la comunidad autónoma más cara, mostrando
+   el porcentaje medio. El mínimo personal se descuenta de la cuota (no de la
+   base) y la cuota de autónomos también cuenta en los modelos 130. Se
+   corrigió que Impuestos mostrara siempre "a compensar" en el IVA.
+
 ## Cómo funciona el proyecto
 
 ### A nivel usuario
@@ -36,12 +47,15 @@ anual) para autónomos en España.
 - **Documentos**: pestañas "Ingreso" (una factura que emites y cobras) y
   "Gasto" (una factura que recibes y pagas). Cada uno queda en su propio
   listado.
+- **Usuario**: tu nombre, NIF/CIF y la cuota de autónomos media mensual, que
+  se descuenta como gasto en los cálculos de IRPF.
 - **Impuestos**: eliges año y trimestre y ves el IVA (modelo 303) y el pago
   fraccionado de IRPF (modelo 130) de ese periodo, calculados con tus
-  documentos reales.
+  documentos reales, el cómputo total a abonar y un resumen de la Renta.
 - **Renta**: eliges un año y ves los 4 modelos 130 de ese año (encadenados,
   no cada uno por separado) y la estimación de la declaración anual
-  (modelo 100): cuánto queda por pagar o a devolver.
+  (modelo 100) con el porcentaje medio de IRPF: cuánto queda por pagar o a
+  devolver.
 - **Privacidad**: cada usuario solo ve sus propias facturas y gastos — todo
   se filtra siempre por el usuario que hizo login, nunca hay una vista que
   mezcle datos de varios usuarios.
@@ -59,9 +73,10 @@ app/
 │   └── deps.py           get_current_user (del JWT) / get_current_db_user (fila de User)
 ├── db/session.py         engine, SessionLocal, Base
 ├── models/models.py      User, Invoice, Expense (SQLAlchemy)
-├── schemas/               Pydantic: InvoiceCreate/Out, ExpenseCreate/Out
+├── schemas/               Pydantic: Invoice, Expense y perfil de usuario
 ├── api/
 │   ├── auth.py           /api/auth/login, /register
+│   ├── users.py          /api/users/me (perfil: nombre, NIF/CIF, cuota de autónomos)
 │   ├── invoices.py       /api/invoices/  (crear y listar, filtrado por owner_id)
 │   ├── expenses.py       /api/expenses/  (idem)
 │   └── taxes.py          /api/taxes/iva, /modelo130, /renta — orquesta datos reales
@@ -106,9 +121,12 @@ src/
 ├── index.css             Estilos globales (variables, tarjetas, tabs, tablas...)
 ├── App.jsx                Rutas y navegación (React Router)
 ├── api/client.js          axios con baseURL = VITE_API_URL, añade el JWT a cada request
+├── hooks/useResumenAnual.js  Carga IVA anual + modelos 130 + Renta (Impuestos y Renta)
+├── utils/nif.js           Validación del dígito de control de NIF/CIF/NIE
 └── pages/
     ├── Home.jsx
     ├── Login.jsx          Login y registro (pestañas)
+    ├── UserPage.jsx       Datos del usuario y cuota de autónomos
     ├── DocumentsPage.jsx  Alta de ingresos/gastos + listados
     ├── TaxesPage.jsx      IVA + modelo 130 por año/trimestre
     └── RentaPage.jsx      Modelo 130 (x4) + modelo 100 por año
@@ -249,6 +267,29 @@ Dos cosas a vigilar cuando actualices:
    quieres controlar manualmente cuándo sale un cambio (en Railway:
    Settings → Source, hay un toggle de "Auto Deploy"; en Vercel: Settings →
    Git).
+
+## Mantenimiento anual
+
+Las escalas hay que actualizarlas cada año, en `ESCALAS_AUTONOMICAS` de
+`tax_calculator.py`.
+
+Matices del cálculo del IRPF que no hay que olvidar al tocarlo:
+
+- **Mínimo personal** (`MINIMO_PERSONAL_DEFAULT`): no se resta de la base
+  liquidable. Se calcula el impuesto de toda la base y después se descuenta
+  el impuesto que corresponde al mínimo con la misma escala
+  (`cuota = escala(base) − escala(mínimo)`). Restarlo de la base ahorra el
+  tipo del último tramo y subestima el impuesto (unos 755 € con un
+  rendimiento de 35.550 €). Además, el mínimo real varía con la edad y las
+  circunstancias familiares; hoy se usa el general de 5.550 €.
+- **Cuota de autónomos**: es gasto deducible tanto en la Renta (×12) como en
+  cada modelo 130 (×3 por trimestre). Cualquier cálculo nuevo que use el
+  rendimiento neto debe incluirla, o los trimestrales y la Renta dejarán de
+  ser coherentes entre sí.
+- **Peor caso**: la cuota se calcula con la comunidad autónoma más cara para
+  cada beneficio (máximo entre las escalas de `ESCALAS_AUTONOMICAS`), porque
+  la estimación es orientativa y preferimos pagar de más que de menos.
+  Navarra y País Vasco (régimen foral) no están incluidas.
 
 ## Próximos pasos sugeridos
 

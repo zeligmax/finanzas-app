@@ -30,6 +30,10 @@ function ResumenRenta({ anio }) {
                 <td>Modelo 100</td>
                 <td>{renta.resultado.toFixed(2)} €</td>
               </tr>
+              <tr>
+                <td>IRPF medio</td>
+                <td>{renta.tipo_medio_pct.toFixed(2)} %</td>
+              </tr>
             </tbody>
           </table>
           <p style={{ marginTop: 12 }}>
@@ -113,7 +117,10 @@ export default function TaxesPage() {
 
               <section className="card">
                 <h2>IRPF · pago fraccionado (modelo 130)</h2>
-                <p>Rendimiento neto del trimestre: {modelo130.rendimiento_neto_trimestre.toFixed(2)} €</p>
+                <p>
+                  Rendimiento neto del trimestre (tras cuota de autónomos):{" "}
+                  {modelo130.rendimiento_neto_trimestre.toFixed(2)} €
+                </p>
                 <p>Rendimiento neto acumulado en el año: {modelo130.rendimiento_neto_acumulado.toFixed(2)} €</p>
                 <p>
                   <strong>A ingresar: {modelo130.resultado.toFixed(2)} €</strong>

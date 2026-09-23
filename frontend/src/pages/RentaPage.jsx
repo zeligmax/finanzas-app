@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import useResumenAnual from "../hooks/useResumenAnual";
 
 const anioActual = new Date().getFullYear();
@@ -57,13 +58,62 @@ export default function RentaPage() {
       {renta && (
         <section className="card">
           <h2>Modelo 100 · declaración anual (estimación)</h2>
-          <p>Base liquidable: {renta.base_liquidable.toFixed(2)} €</p>
-          <p>Cuota íntegra: {renta.cuota_integra.toFixed(2)} €</p>
-          <p>
+          <table>
+            <tbody>
+              <tr>
+                <td>Rendimiento neto (ingresos − gastos)</td>
+                <td>{(renta.rendimiento_neto_tras_cuota + renta.cuota_autonomos_anual).toFixed(2)} €</td>
+              </tr>
+              <tr>
+                <td>Cuota de autónomos del año (deducible)</td>
+                <td>− {renta.cuota_autonomos_anual.toFixed(2)} €</td>
+              </tr>
+              <tr>
+                <td>Rendimiento neto tras cuota</td>
+                <td>{renta.rendimiento_neto_tras_cuota.toFixed(2)} €</td>
+              </tr>
+              <tr>
+                <td>Base liquidable</td>
+                <td>{renta.base_liquidable.toFixed(2)} €</td>
+              </tr>
+              <tr>
+                <td>Impuesto sobre la base (escalas estatal + autonómica)</td>
+                <td>{renta.cuota_sobre_base.toFixed(2)} €</td>
+              </tr>
+              <tr>
+                <td>Reducción por mínimo personal</td>
+                <td>− {renta.reduccion_minimo_personal.toFixed(2)} €</td>
+              </tr>
+              <tr>
+                <td>Cuota íntegra</td>
+                <td>{renta.cuota_integra.toFixed(2)} €</td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Porcentaje medio de IRPF</strong>
+                </td>
+                <td>
+                  <strong>{renta.tipo_medio_pct.toFixed(2)} %</strong>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p style={{ marginTop: 12 }}>
             <strong>
               Resultado: {renta.resultado.toFixed(2)} € ({renta.a_pagar ? "a pagar" : "a devolver"})
             </strong>
           </p>
+          <p className="muted">
+            Estimación orientativa en el peor caso: se aplica la escala (estatal + autonómica) de la comunidad
+            autónoma que resulta más cara para este beneficio
+            {renta.comunidad_referencia ? ` (${renta.comunidad_referencia})` : ""}. El porcentaje medio es la cuota
+            íntegra entre el rendimiento neto tras la cuota de autónomos.
+          </p>
+          {renta.cuota_autonomos_anual === 0 && (
+            <p className="muted">
+              No has indicado tu cuota de autónomos. Puedes añadirla en <Link to="/usuario">Usuario</Link>.
+            </p>
+          )}
         </section>
       )}
 

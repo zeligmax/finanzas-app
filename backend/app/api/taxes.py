@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_db_user, get_current_user
+from app.core.deps import get_target_owner
 from app.db.session import get_db
 from app.models.models import Expense, Invoice, User
 from app.services.tax_calculator import (
@@ -15,11 +15,6 @@ from app.services.tax_calculator import (
 )
 
 router = APIRouter(prefix="/api/taxes", tags=["taxes"])
-
-
-def _owner_id(db: Session, user: dict):
-    owner = db.query(User).filter(User.email == user["email"]).first()
-    return owner.id if owner else None
 
 
 def _validar_trimestre(trimestre: int) -> None:
@@ -62,10 +57,10 @@ def iva_trimestral(
     anio: int,
     trimestre: int,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    owner: User = Depends(get_target_owner),
 ):
     _validar_trimestre(trimestre)
-    owner_id = _owner_id(db, user)
+    owner_id = owner.id
     facturas = _facturas_trimestre(db, owner_id, anio, trimestre)
     gastos = _gastos_trimestre(db, owner_id, anio, trimestre)
 
@@ -141,7 +136,7 @@ def modelo_130(
     anio: int,
     trimestre: int,
     db: Session = Depends(get_db),
-    owner: User = Depends(get_current_db_user),
+    owner: User = Depends(get_target_owner),
 ):
     _validar_trimestre(trimestre)
     resultados = _modelo130_acumulado(db, owner, anio, trimestre)
@@ -152,7 +147,7 @@ def modelo_130(
 def modelo_130_anual(
     anio: int,
     db: Session = Depends(get_db),
-    owner: User = Depends(get_current_db_user),
+    owner: User = Depends(get_target_owner),
 ):
     """Los 4 modelos 130 del año, encadenados con sus acumulados reales."""
     resultados = _modelo130_acumulado(db, owner, anio, 4)
@@ -163,7 +158,7 @@ def modelo_130_anual(
 def renta_anual(
     anio: int,
     db: Session = Depends(get_db),
-    owner: User = Depends(get_current_db_user),
+    owner: User = Depends(get_target_owner),
 ):
     owner_id = owner.id
     facturas = (

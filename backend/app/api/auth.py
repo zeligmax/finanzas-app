@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_db
-from app.models.models import User
+from app.models.models import RoleEnum, User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -16,6 +16,7 @@ class RegisterIn(BaseModel):
     email: str
     password: str
     full_name: Optional[str] = None
+    es_gestor: bool = False
 
 
 @router.post("/login")
@@ -35,7 +36,10 @@ def register(payload: RegisterIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Usuario ya existe")
 
     user = User(
-        email=payload.email, full_name=payload.full_name, hashed_password=hash_password(payload.password)
+        email=payload.email,
+        full_name=payload.full_name,
+        hashed_password=hash_password(payload.password),
+        role=RoleEnum.gestor if payload.es_gestor else RoleEnum.team,
     )
     db.add(user)
     db.commit()

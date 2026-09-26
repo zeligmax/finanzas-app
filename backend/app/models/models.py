@@ -1,8 +1,8 @@
 import enum
 import uuid
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Column, Date, Enum, Float, ForeignKey, String
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum, Float, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -26,6 +26,26 @@ class User(Base):
     cuota_autonomos_mensual = Column(Float, nullable=False, default=0.0, server_default="0")
     role = Column(Enum(RoleEnum), default=RoleEnum.team, nullable=False)
     is_active = Column(Boolean, default=True)
+
+
+class GestorAccess(Base):
+    """
+    Acceso de solo lectura de un gestor a los datos de un usuario.
+
+    El dueño crea una invitación (estado "pendiente") con un código de un solo uso
+    que comparte con su gestor. Al canjearlo, pasa a "aceptado" y se rellena gestor_id.
+    """
+
+    __tablename__ = "gestor_access"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    gestor_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    codigo = Column(String, unique=True, index=True, nullable=False)
+    etiqueta = Column(String, nullable=True)
+    estado = Column(String, nullable=False, default="pendiente")  # "pendiente" | "aceptado"
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
 
 
 class Invoice(Base):

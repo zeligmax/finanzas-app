@@ -42,6 +42,12 @@ anual) para autónomos en España.
    Editar (recarga el formulario con sus datos y guarda los cambios) y Borrar
    (con confirmación). Los cálculos de Impuestos y Renta se actualizan solos
    al cambiar o eliminar un documento.
+9. **Acceso de gestores (solo lectura)**: un usuario puede dar acceso a su
+   gestor mediante un código de invitación de un solo uso. El gestor, con una
+   cuenta de tipo gestor, canjea el código y ve —sin poder modificar nada— los
+   documentos, impuestos y Renta de ese cliente, hasta que el cliente lo
+   revoque. Antes se investigó qué software usan las gestorías y cómo se
+   relacionan con Hacienda (ver "Gestorías y Administración").
 
 ## Cómo funciona el proyecto
 
@@ -61,9 +67,15 @@ anual) para autónomos en España.
   no cada uno por separado) y la estimación de la declaración anual
   (modelo 100) con el porcentaje medio de IRPF: cuánto queda por pagar o a
   devolver.
-- **Privacidad**: cada usuario solo ve sus propias facturas y gastos — todo
-  se filtra siempre por el usuario que hizo login, nunca hay una vista que
-  mezcle datos de varios usuarios.
+- **Gestor**: en esa sección generas un código de invitación (caduca a los 7
+  días y solo sirve una vez) y se lo pasas a tu gestor. Puedes cancelarlo o
+  revocar el acceso cuando quieras.
+- **Si eres gestor** (casilla al crear la cuenta): en Clientes canjeas el
+  código de cada cliente y eliges a quién consultar. Todo lo ves en solo
+  lectura, con un aviso visible de a quién estás viendo.
+- **Privacidad**: cada usuario solo ve sus propias facturas y gastos. La única
+  excepción es un gestor al que tú hayas dado acceso, que puedes quitar en
+  cualquier momento.
 
 ### A nivel programador
 
@@ -77,11 +89,12 @@ app/
 │   ├── security.py       hash/verify de contraseñas (bcrypt), JWT
 │   └── deps.py           get_current_user (del JWT) / get_current_db_user (fila de User)
 ├── db/session.py         engine, SessionLocal, Base
-├── models/models.py      User, Invoice, Expense (SQLAlchemy)
+├── models/models.py      User, Invoice, Expense, GestorAccess (SQLAlchemy)
 ├── schemas/               Pydantic: Invoice, Expense y perfil de usuario
 ├── api/
 │   ├── auth.py           /api/auth/login, /register
 │   ├── users.py          /api/users/me (perfil: nombre, NIF/CIF, cuota de autónomos)
+│   ├── access.py         /api/access (invitaciones del dueño) y /api/gestor (canje y clientes)
 │   ├── invoices.py       /api/invoices/  (listar, crear, PUT y DELETE por id; siempre por owner_id)
 │   ├── expenses.py       /api/expenses/  (idem)
 │   └── taxes.py          /api/taxes/iva, /modelo130, /renta — orquesta datos reales
@@ -114,6 +127,16 @@ app/
   existe o es de otro usuario devuelven 404 (no 403), para no revelar que el
   id existe. `PUT` reemplaza todos los campos editables (mismo esquema que el
   alta).
+- **Acceso de gestores**: tabla `gestor_access` (dueño, gestor, código,
+  estado `pendiente`/`aceptado`, caducidad). Se vincula con un **código de un
+  solo uso** y no por correo, porque la app no verifica correos y cualquiera
+  podría registrarse con el correo del gestor. La dependencia
+  `get_target_owner` (`core/deps.py`) decide de quién son los datos que se
+  leen: el propio usuario o, si es gestor con acceso aceptado, el `cliente_id`
+  que pasa por parámetro. **Solo se usa en endpoints de lectura** (listados y
+  cálculos de impuestos); los de escritura usan siempre `get_current_db_user`,
+  así un gestor no puede modificar datos de un cliente. Cualquier caso no
+  permitido responde 404.
 - **Auth**: JWT (`python-jose`) con contraseñas en bcrypt. Hay un campo
   `role` en `User` (`owner` / `team` / `gestor`) pensado para el futuro rol
   de solo-lectura, pero hoy todos los endpoints solo comprueban que hay un
@@ -137,6 +160,8 @@ src/
     ├── Home.jsx
     ├── Login.jsx          Login y registro (pestañas)
     ├── UserPage.jsx       Datos del usuario y cuota de autónomos
+    ├── AccesoPage.jsx     (dueño) invitaciones y accesos de gestores
+    ├── ClientesPage.jsx   (gestor) canjear códigos y elegir cliente
     ├── DocumentsPage.jsx  Alta de ingresos/gastos + listados
     ├── TaxesPage.jsx      IVA + modelo 130 por año/trimestre
     └── RentaPage.jsx      Modelo 130 (x4) + modelo 100 por año
@@ -278,6 +303,55 @@ Dos cosas a vigilar cuando actualices:
    Settings → Source, hay un toggle de "Auto Deploy"; en Vercel: Settings →
    Git).
 
+## Gestorías y Administración (investigación, sept. 2026)
+
+Resultado de investigar cómo trabajan las gestorías, para decidir qué exportar.
+Es una fotografía de esa fecha: conviene revisarla antes de implementar.
+
+**Software de las gestorías**: el estándar es **a3** (Wolters Kluwer:
+a3asesor, a3innuva). Después Sage (Despachos, Sage 50), Holded, Contaplus y
+Monitor Informática. No hay cuotas de mercado públicas fiables. a3 importa por
+Excel con plantillas o por su fichero de enlace `SUENLACE.DAT` (ASCII; su
+especificación, "Enlace Contable - Descripción de Registros", no es pública);
+Sage importa CSV/Excel con un mapeo de columnas. Apps para autónomos como
+Quipu dan acceso a la gestoría con un usuario extra y exportan a Excel/CSV.
+
+**Relación con Hacienda**: la gestoría presenta los modelos como colaborador
+social (certificado electrónico + autorización del cliente) o con
+apoderamiento en la Sede. Nuestra app **no presenta nada ante Hacienda**. La
+AEAT ofrece Pre303, Pre130 y Renta WEB, que rellenan los modelos 303, 130 y la
+Renta al importar un **Excel oficial (XLSX)** de libros registro.
+
+**Formato oficial de libros registro (AEAT)**: un único XLSX (máx. 4 MB) con
+las hojas `EXPEDIDAS_INGRESOS` y `RECIBIDAS_GASTOS` (y opcional
+`BIENES-INVERSIÓN`), sin fraccionar por trimestre (del 1 de enero al fin del
+trimestre). Nombre del fichero: ejercicio + NIF + tipo (`T` = unificado
+IVA+IRPF) + nombre. La hoja de ingresos tiene 36 columnas y la de gastos 42
+(diseño en `LSI.xlsx`). a3 también exporta este formato. Hay un servicio de
+validación de ficheros en la Sede.
+
+**Lo que nos falta para generarlo**: epígrafe del IAE, tipo de factura, código
+de concepto de gasto (hoy la categoría es texto libre), clave de operación, y
+la cuota de autónomos como gasto.
+
+**Verifactu y factura electrónica**: según las fuentes consultadas, Verifactu
+es obligatorio para el software de facturación desde el 1 de enero de 2027
+(sociedades) y el 1 de julio de 2027 (resto, incluidos autónomos), tras el
+Real Decreto-ley 15/2025. La factura electrónica B2B (Ley Crea y Crece, Real
+Decreto 238/2026) se aplicará de forma escalonada. Afectan a quien **emite**
+facturas: nuestra app solo las registra, así que no aplican mientras no
+añadamos emisión.
+
+**Plan de exportaciones** (pendiente): 1) Excel oficial AEAT de libros
+unificados, 2) Excel/CSV limpio para las plantillas de a3 y Sage, 3) PDF
+resumen, 4) `SUENLACE.DAT` solo si la gestoría lo pide. Antes de decidir el
+punto 4 hay que preguntar a la gestoría real qué software usa.
+
+Fuentes: [Formatos electrónicos de los libros registro (AEAT, PDF)](https://sede.agenciatributaria.gob.es/static_files/Sede/Tema/IVA/Fact_registro/Libros_registro/Formato_Electronico_Comun_Libros_Registro_IVA_IRPF.pdf),
+[Diseños de registro LSI.xlsx](https://sede.agenciatributaria.gob.es/static_files/AEAT/LSI.xlsx),
+[Pre130: importación de libros](https://sede.agenciatributaria.gob.es/Sede/ayuda/consultas-informaticas/presentacion-declaraciones-ayuda-tecnica/modelo-130/pre130-colectivo-importacion.html),
+[Colaboración social (AEAT)](https://sede.agenciatributaria.gob.es/Sede/colaborar-agencia-tributaria/colaboracion-social-presentacion-declaraciones/preguntas-frecuentes-sobre-colaboracion-social.html).
+
 ## Mantenimiento anual
 
 Las escalas hay que actualizarlas cada año, en `ESCALAS_AUTONOMICAS` de
@@ -308,9 +382,10 @@ Matices del cálculo del IRPF que no hay que olvidar al tocarlo:
    real y detección).
 2. Afinar el IRPF: mínimo personal según edad y circunstancias familiares, y
    contemplar Navarra y País Vasco (régimen foral), que hoy no están.
-3. Rol `gestor`: vista de solo lectura + exportación a su software (A3,
-   Sage...). El campo `role` ya existe en `User`, falta aplicarlo en los
-   endpoints.
+3. Exportaciones para la gestoría (el acceso de solo lectura ya está hecho):
+   Excel oficial de libros registro de la AEAT, Excel/CSV para a3 y Sage y PDF
+   resumen. Ver "Gestorías y Administración" para el plan y los campos que
+   faltan (IAE, tipo de factura, concepto de gasto).
 4. Si el proyecto pasa de "feedback con amigos" a uso real con datos
    sensibles de terceros, valorar cifrado de extremo a extremo para que
    ni con acceso a la base de datos se puedan leer los documentos de cada

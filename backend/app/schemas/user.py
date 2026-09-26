@@ -13,3 +13,4 @@ class UserProfileOut(UserProfileUpdate):
     model_config = ConfigDict(from_attributes=True)
 
     email: str
+    role: str

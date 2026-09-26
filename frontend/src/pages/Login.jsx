@@ -6,6 +6,7 @@ export default function Login({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [esGestor, setEsGestor] = useState(false);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -41,6 +42,7 @@ export default function Login({ onLogin }) {
         email,
         password,
         full_name: fullName || null,
+        es_gestor: esGestor,
       });
       const token = res.data.access_token;
       if (token) {
@@ -106,6 +108,11 @@ export default function Login({ onLogin }) {
             />
           </div>
 
+          <label className="check">
+            <input type="checkbox" checked={esGestor} onChange={(e) => setEsGestor(e.target.checked)} />
+            Soy gestor/asesor (veré, solo en lectura, los datos de los clientes que me den acceso)
+          </label>
+
           <button type="submit" disabled={saving}>
             {saving ? "Creando cuenta..." : "Crear cuenta"}
           </button>
@@ -114,7 +121,7 @@ export default function Login({ onLogin }) {
       )}
 
       <p className="muted" style={{ marginTop: 12 }}>
-        Tus facturas y gastos solo los ves tú, asociados a tu correo.
+        Tus facturas y gastos solo los ves tú, salvo que des acceso de lectura a tu gestor.
       </p>
     </div>
   );

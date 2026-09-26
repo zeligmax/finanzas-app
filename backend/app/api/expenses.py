@@ -4,7 +4,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_db_user
+from app.core.deps import get_current_db_user, get_target_owner
 from app.db.session import get_db
 from app.models.models import Expense, User
 from app.schemas.expense import ExpenseCreate, ExpenseOut
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/expenses", tags=["expenses"])
 @router.get("/", response_model=List[ExpenseOut])
 def listar_gastos(
     db: Session = Depends(get_db),
-    owner: User = Depends(get_current_db_user),
+    owner: User = Depends(get_target_owner),
 ):
     return (
         db.query(Expense)

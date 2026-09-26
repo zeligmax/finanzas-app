@@ -228,13 +228,13 @@ function RowActions({ onEdit, onDelete }) {
   );
 }
 
-function InvoiceList({ items, editingId, onEdit, onDelete }) {
+function InvoiceList({ items, editingId, onEdit, onDelete, soloLectura }) {
   if (!items.length) return <p className="muted">Todavía no hay ingresos registrados.</p>;
   return (
     <table>
       <thead>
         <tr>
-          {["Nº factura", "Fecha", "Pagador", "Base", "IVA %", "IRPF %", "Total", ""].map((h, i) => (
+          {["Nº factura", "Fecha", "Pagador", "Base", "IVA %", "IRPF %", "Total", ...(soloLectura ? [] : [""])].map((h, i) => (
             <th key={i}>{h}</th>
           ))}
         </tr>
@@ -249,7 +249,7 @@ function InvoiceList({ items, editingId, onEdit, onDelete }) {
             <td>{f.tipo_iva}%</td>
             <td>{f.retencion_irpf_pct}%</td>
             <td>{f.total.toFixed(2)} €</td>
-            <RowActions onEdit={() => onEdit(f)} onDelete={() => onDelete(f)} />
+            {!soloLectura && <RowActions onEdit={() => onEdit(f)} onDelete={() => onDelete(f)} />}
           </tr>
         ))}
       </tbody>
@@ -257,13 +257,13 @@ function InvoiceList({ items, editingId, onEdit, onDelete }) {
   );
 }
 
-function ExpenseList({ items, editingId, onEdit, onDelete }) {
+function ExpenseList({ items, editingId, onEdit, onDelete, soloLectura }) {
   if (!items.length) return <p className="muted">Todavía no hay gastos registrados.</p>;
   return (
     <table>
       <thead>
         <tr>
-          {["Nº factura", "Fecha", "Cobrador", "Categoría", "Base", "IVA %", "IRPF %", ""].map((h, i) => (
+          {["Nº factura", "Fecha", "Cobrador", "Categoría", "Base", "IVA %", "IRPF %", ...(soloLectura ? [] : [""])].map((h, i) => (
             <th key={i}>{h}</th>
           ))}
         </tr>
@@ -278,7 +278,7 @@ function ExpenseList({ items, editingId, onEdit, onDelete }) {
             <td>{g.base_imponible.toFixed(2)} €</td>
             <td>{g.tipo_iva}%</td>
             <td>{g.retencion_irpf_pct}%</td>
-            <RowActions onEdit={() => onEdit(g)} onDelete={() => onDelete(g)} />
+            {!soloLectura && <RowActions onEdit={() => onEdit(g)} onDelete={() => onDelete(g)} />}
           </tr>
         ))}
       </tbody>
@@ -286,7 +286,7 @@ function ExpenseList({ items, editingId, onEdit, onDelete }) {
   );
 }
 
-export default function DocumentsPage() {
+export default function DocumentsPage({ soloLectura = false }) {
   const [tab, setTab] = useState("ingreso");
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
@@ -348,31 +348,32 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {tab === "ingreso" ? (
-        <InvoiceForm
-          key={editing ? editing.id : "nuevo"}
-          initial={editing}
-          onSaved={guardado}
-          onCancel={() => setEditing(null)}
-        />
-      ) : (
-        <ExpenseForm
-          key={editing ? editing.id : "nuevo"}
-          initial={editing}
-          onSaved={guardado}
-          onCancel={() => setEditing(null)}
-        />
-      )}
+      {!soloLectura &&
+        (tab === "ingreso" ? (
+          <InvoiceForm
+            key={editing ? editing.id : "nuevo"}
+            initial={editing}
+            onSaved={guardado}
+            onCancel={() => setEditing(null)}
+          />
+        ) : (
+          <ExpenseForm
+            key={editing ? editing.id : "nuevo"}
+            initial={editing}
+            onSaved={guardado}
+            onCancel={() => setEditing(null)}
+          />
+        ))}
 
       {tab === "ingreso" ? (
         <section className="card">
           <h2>Ingresos registrados</h2>
-          <InvoiceList items={invoices} editingId={editing?.id} onEdit={editar} onDelete={borrar} />
+          <InvoiceList items={invoices} editingId={editing?.id} onEdit={editar} onDelete={borrar} soloLectura={soloLectura} />
         </section>
       ) : (
         <section className="card">
           <h2>Gastos registrados</h2>
-          <ExpenseList items={expenses} editingId={editing?.id} onEdit={editar} onDelete={borrar} />
+          <ExpenseList items={expenses} editingId={editing?.id} onEdit={editar} onDelete={borrar} soloLectura={soloLectura} />
         </section>
       )}
     </div>

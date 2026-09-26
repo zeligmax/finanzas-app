@@ -1,6 +1,7 @@
+import uuid
 from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_db_user
@@ -35,3 +36,35 @@ def crear_gasto(
     db.commit()
     db.refresh(gasto)
     return gasto
+
+
+def _gasto_propio(db: Session, owner: User, gasto_id: uuid.UUID) -> Expense:
+    gasto = db.query(Expense).filter(Expense.id == gasto_id, Expense.owner_id == owner.id).first()
+    if not gasto:
+        raise HTTPException(status_code=404, detail="Gasto no encontrado")
+    return gasto
+
+
+@router.put("/{gasto_id}", response_model=ExpenseOut)
+def editar_gasto(
+    gasto_id: uuid.UUID,
+    payload: ExpenseCreate,
+    db: Session = Depends(get_db),
+    owner: User = Depends(get_current_db_user),
+):
+    gasto = _gasto_propio(db, owner, gasto_id)
+    for campo, valor in payload.model_dump().items():
+        setattr(gasto, campo, valor)
+    db.commit()
+    db.refresh(gasto)
+    return gasto
+
+
+@router.delete("/{gasto_id}", status_code=204)
+def borrar_gasto(
+    gasto_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    owner: User = Depends(get_current_db_user),
+):
+    db.delete(_gasto_propio(db, owner, gasto_id))
+    db.commit()

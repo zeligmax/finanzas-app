@@ -38,6 +38,11 @@ anual) para autónomos en España.
    base) y la cuota de autónomos también cuenta en los modelos 130. Se
    corrigió que Impuestos mostrara siempre "a compensar" en el IVA.
 
+8. **Editar y borrar documentos**: cada ingreso y gasto tiene ahora botones
+   Editar (recarga el formulario con sus datos y guarda los cambios) y Borrar
+   (con confirmación). Los cálculos de Impuestos y Renta se actualizan solos
+   al cambiar o eliminar un documento.
+
 ## Cómo funciona el proyecto
 
 ### A nivel usuario
@@ -46,7 +51,7 @@ anual) para autónomos en España.
   contraseña. No hace falta invitación ni aprobación.
 - **Documentos**: pestañas "Ingreso" (una factura que emites y cobras) y
   "Gasto" (una factura que recibes y pagas). Cada uno queda en su propio
-  listado.
+  listado, desde donde puedes editarlo o borrarlo.
 - **Usuario**: tu nombre, NIF/CIF y la cuota de autónomos media mensual, que
   se descuenta como gasto en los cálculos de IRPF.
 - **Impuestos**: eliges año y trimestre y ves el IVA (modelo 303) y el pago
@@ -77,7 +82,7 @@ app/
 ├── api/
 │   ├── auth.py           /api/auth/login, /register
 │   ├── users.py          /api/users/me (perfil: nombre, NIF/CIF, cuota de autónomos)
-│   ├── invoices.py       /api/invoices/  (crear y listar, filtrado por owner_id)
+│   ├── invoices.py       /api/invoices/  (listar, crear, PUT y DELETE por id; siempre por owner_id)
 │   ├── expenses.py       /api/expenses/  (idem)
 │   └── taxes.py          /api/taxes/iva, /modelo130, /renta — orquesta datos reales
 ├── services/
@@ -104,6 +109,11 @@ app/
     reales (no placeholders).
   - `calcular_renta_anual`: modelo 100, usa como pagos fraccionados la
     suma real de los 4 modelos 130 del año (vía la misma función).
+- **Editar/borrar**: `PUT` y `DELETE` en `/api/invoices/{id}` y
+  `/api/expenses/{id}` buscan el documento por id **y** por `owner_id`. Si no
+  existe o es de otro usuario devuelven 404 (no 403), para no revelar que el
+  id existe. `PUT` reemplaza todos los campos editables (mismo esquema que el
+  alta).
 - **Auth**: JWT (`python-jose`) con contraseñas en bcrypt. Hay un campo
   `role` en `User` (`owner` / `team` / `gestor`) pensado para el futuro rol
   de solo-lectura, pero hoy todos los endpoints solo comprueban que hay un
@@ -293,16 +303,15 @@ Matices del cálculo del IRPF que no hay que olvidar al tocarlo:
 
 ## Próximos pasos sugeridos
 
-1. Editar y borrar facturas/gastos (hoy solo se pueden crear y listar).
-2. Integrar OCR para extraer datos automáticamente de PDFs/imágenes de
+1. Integrar OCR para extraer datos automáticamente de PDFs/imágenes de
    facturas (`archivo_url` ya existe en los modelos, pendiente de subida
    real y detección).
-3. Ajustar la escala de IRPF anual (`TRAMOS_IRPF` en `tax_calculator.py`)
-   por comunidad autónoma — hoy es una escala combinada orientativa.
-4. Rol `gestor`: vista de solo lectura + exportación a su software (A3,
+2. Afinar el IRPF: mínimo personal según edad y circunstancias familiares, y
+   contemplar Navarra y País Vasco (régimen foral), que hoy no están.
+3. Rol `gestor`: vista de solo lectura + exportación a su software (A3,
    Sage...). El campo `role` ya existe en `User`, falta aplicarlo en los
    endpoints.
-5. Si el proyecto pasa de "feedback con amigos" a uso real con datos
+4. Si el proyecto pasa de "feedback con amigos" a uso real con datos
    sensibles de terceros, valorar cifrado de extremo a extremo para que
    ni con acceso a la base de datos se puedan leer los documentos de cada
    usuario.

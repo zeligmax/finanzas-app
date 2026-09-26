@@ -129,6 +129,30 @@ button.secondary:hover {
   background: var(--color-bg);
 }
 
+button.small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+button.danger {
+  background: var(--color-danger);
+}
+
+button.danger:hover {
+  background: #b91c1c;
+}
+
+.actions,
+.form-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+tr.editing {
+  background: #eef2ff;
+}
+
 input,
 select {
   width: 100%;

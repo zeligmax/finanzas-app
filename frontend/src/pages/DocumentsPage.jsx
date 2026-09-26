@@ -39,6 +39,126 @@ const numeros = (form) => ({
   retencion_irpf_pct: parseFloat(form.retencion_irpf_pct) || 0,
 });
 
+const valor = (v) => (v === null || v === undefined ? "" : v);
+
+function aFormulario(lectura, tipo) {
+  const comunes = {
+    fecha: lectura.fecha || today(),
+    base_imponible: valor(lectura.base_imponible),
+    tipo_iva: lectura.tipo_iva ?? 21,
+    retencion_irpf_pct: lectura.retencion_irpf_pct ?? 0,
+  };
+  if (tipo === "ingreso") {
+    return {
+      ...comunes,
+      numero: valor(lectura.numero),
+      cliente_nombre: valor(lectura.receptor.nombre),
+      cliente_nif: valor(lectura.receptor.nif),
+      emisor_nombre: valor(lectura.emisor.nombre),
+      emisor_nif: valor(lectura.emisor.nif),
+    };
+  }
+  return {
+    ...comunes,
+    numero_factura: valor(lectura.numero),
+    proveedor_nombre: valor(lectura.emisor.nombre),
+    proveedor_nif: valor(lectura.emisor.nif),
+    pagador_nombre: valor(lectura.receptor.nombre),
+    pagador_nif: valor(lectura.receptor.nif),
+  };
+}
+
+const MAX_MB = 8;
+
+function LectorFactura({ onLeida, deshabilitado }) {
+  const [archivo, setArchivo] = useState(null);
+  const [leyendo, setLeyendo] = useState(false);
+  const [error, setError] = useState(null);
+
+  const leer = async (e) => {
+    e.preventDefault();
+    if (!archivo) return;
+    if (archivo.size > MAX_MB * 1024 * 1024) {
+      setError(`El archivo supera los ${MAX_MB} MB.`);
+      return;
+    }
+    setError(null);
+    setLeyendo(true);
+    try {
+      const datos = new FormData();
+      datos.append("file", archivo);
+      const res = await api.post("/api/documents/extract", datos);
+      onLeida(res.data);
+      setArchivo(null);
+      e.target.reset();
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    } finally {
+      setLeyendo(false);
+    }
+  };
+
+  return (
+    <form onSubmit={leer} className="card" style={{ maxWidth: 480 }}>
+      <h2>Leer una factura</h2>
+      <p className="muted">
+        Sube un PDF o una imagen (JPG, PNG...) en castellano, catalán o inglés y se rellenará el formulario para que
+        lo revises. El archivo no se guarda.
+      </p>
+      <div className="form-actions">
+        <input
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,application/pdf,image/*"
+          onChange={(e) => setArchivo(e.target.files[0] || null)}
+          disabled={deshabilitado || leyendo}
+          style={{ width: "auto", flex: 1, minWidth: 0 }}
+        />
+        <button type="submit" disabled={!archivo || leyendo || deshabilitado} style={{ whiteSpace: "nowrap" }}>
+          {leyendo ? "Leyendo..." : "Leer factura"}
+        </button>
+      </div>
+      {error && <p className="error">Error: {String(error)}</p>}
+    </form>
+  );
+}
+
+function ResultadoLectura({ lectura, tabActiva, onDescartar }) {
+  const nombreTipo = { ingreso: "un ingreso (factura emitida)", gasto: "un gasto (factura recibida)" };
+  return (
+    <div className="banner" style={{ maxWidth: 480 }}>
+      <strong>Datos leídos de la factura.</strong> Revísalos antes de guardar.
+      {lectura.tipo ? (
+        <p style={{ margin: "6px 0" }}>
+          Se ha detectado como {nombreTipo[lectura.tipo]} porque tu NIF/CIF coincide con el{" "}
+          {lectura.tipo === "ingreso" ? "del emisor" : "del cliente o pagador"}.
+        </p>
+      ) : (
+        <p style={{ margin: "6px 0" }}>
+          No se ha podido saber si es un ingreso o un gasto (falta tu NIF/CIF en Usuario, o no aparece en la
+          factura). Se ha usado la pestaña {tabActiva === "ingreso" ? "Ingreso" : "Gasto"}; cámbiala si no es esa.
+        </p>
+      )}
+      {tabActiva === "gasto" && (
+        <p style={{ margin: "6px 0" }}>Recuerda indicar la <strong>categoría</strong> del gasto: no viene en la factura.</p>
+      )}
+      {lectura.avisos.length > 0 && (
+        <ul style={{ margin: "6px 0", paddingLeft: 18 }}>
+          {lectura.avisos.map((a, i) => (
+            <li key={i}>{a}</li>
+          ))}
+        </ul>
+      )}
+      <details>
+        <summary style={{ cursor: "pointer" }}>Ver el texto leído</summary>
+        <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 220, overflow: "auto" }}>{lectura.texto}</pre>
+      </details>
+      <button type="button" className="secondary small" style={{ marginTop: 8 }} onClick={onDescartar}>
+        Descartar y empezar en blanco
+      </button>
+    </div>
+  );
+}
+
 function Field({ label, warning, children }) {
   return (
     <div className="field">
@@ -67,8 +187,8 @@ function FormActions({ editing, saving, textoAnadir, onCancel, error }) {
   );
 }
 
-function InvoiceForm({ initial, onSaved, onCancel }) {
-  const [form, setForm] = useState(initial ? toForm(emptyInvoice, initial) : emptyInvoice);
+function InvoiceForm({ initial, prefill, onSaved, onCancel }) {
+  const [form, setForm] = useState(initial ? toForm(emptyInvoice, initial) : { ...emptyInvoice, ...prefill });
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -138,8 +258,8 @@ function InvoiceForm({ initial, onSaved, onCancel }) {
   );
 }
 
-function ExpenseForm({ initial, onSaved, onCancel }) {
-  const [form, setForm] = useState(initial ? toForm(emptyExpense, initial) : emptyExpense);
+function ExpenseForm({ initial, prefill, onSaved, onCancel }) {
+  const [form, setForm] = useState(initial ? toForm(emptyExpense, initial) : { ...emptyExpense, ...prefill });
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -291,6 +411,8 @@ export default function DocumentsPage({ soloLectura = false }) {
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [editing, setEditing] = useState(null);
+  const [lectura, setLectura] = useState(null);
+  const [lecturaId, setLecturaId] = useState(0);
   const [error, setError] = useState(null);
 
   const load = () => {
@@ -309,6 +431,13 @@ export default function DocumentsPage({ soloLectura = false }) {
     setEditing(null);
   };
 
+  const factura_leida = (datos) => {
+    setEditing(null);
+    setLectura(datos);
+    setLecturaId((n) => n + 1);
+    if (datos.tipo) setTab(datos.tipo);
+  };
+
   const editar = (item) => {
     setEditing(item);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -316,6 +445,7 @@ export default function DocumentsPage({ soloLectura = false }) {
 
   const guardado = () => {
     setEditing(null);
+    setLectura(null);
     load();
   };
 
@@ -339,6 +469,11 @@ export default function DocumentsPage({ soloLectura = false }) {
       <h1>Documentos</h1>
       {error && <p className="error">Error: {String(error)}</p>}
 
+      {!soloLectura && <LectorFactura onLeida={factura_leida} />}
+      {!soloLectura && lectura && (
+        <ResultadoLectura lectura={lectura} tabActiva={tab} onDescartar={() => setLectura(null)} />
+      )}
+
       <div className="tabs">
         <div className={`tab ${tab === "ingreso" ? "active" : ""}`} onClick={() => cambiarTab("ingreso")}>
           Ingreso (factura emitida)
@@ -351,15 +486,17 @@ export default function DocumentsPage({ soloLectura = false }) {
       {!soloLectura &&
         (tab === "ingreso" ? (
           <InvoiceForm
-            key={editing ? editing.id : "nuevo"}
+            key={editing ? editing.id : `nuevo-${lecturaId}-${lectura ? "leida" : "vacia"}`}
             initial={editing}
+            prefill={lectura ? aFormulario(lectura, "ingreso") : undefined}
             onSaved={guardado}
             onCancel={() => setEditing(null)}
           />
         ) : (
           <ExpenseForm
-            key={editing ? editing.id : "nuevo"}
+            key={editing ? editing.id : `nuevo-${lecturaId}-${lectura ? "leida" : "vacia"}`}
             initial={editing}
+            prefill={lectura ? aFormulario(lectura, "gasto") : undefined}
             onSaved={guardado}
             onCancel={() => setEditing(null)}
           />

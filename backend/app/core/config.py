@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     # Orígenes del frontend permitidos por CORS, separados por comas.
     CORS_ORIGINS: str = "http://localhost:5173"
 
+    # Ruta al ejecutable de Tesseract si no está en el PATH (por ejemplo en Windows).
+    TESSERACT_CMD: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]

@@ -48,6 +48,13 @@ anual) para autónomos en España.
    documentos, impuestos y Renta de ese cliente, hasta que el cliente lo
    revoque. Antes se investigó qué software usan las gestorías y cómo se
    relacionan con Hacienda (ver "Gestorías y Administración").
+10. **Lectura automática de facturas (OCR)**: en Documentos se puede subir un
+    PDF o una imagen de una factura, en castellano, catalán o inglés, y la app
+    rellena el formulario con lo que lee (número, fecha, NIF/nombre del emisor
+    y del cliente, base, IVA, IRPF y total) para que el usuario lo revise antes
+    de guardar. Se decidió OCR local con Tesseract, sin enviar las facturas a
+    ningún servicio externo, y sin guardar el archivo (ver "Lectura de facturas
+    (OCR)" para cómo funciona y sus límites).
 
 ## Cómo funciona el proyecto
 
@@ -57,7 +64,10 @@ anual) para autónomos en España.
   contraseña. No hace falta invitación ni aprobación.
 - **Documentos**: pestañas "Ingreso" (una factura que emites y cobras) y
   "Gasto" (una factura que recibes y pagas). Cada uno queda en su propio
-  listado, desde donde puedes editarlo o borrarlo.
+  listado, desde donde puedes editarlo o borrarlo. Encima hay "Leer una
+  factura": subes un PDF o una imagen (hasta 8 MB) y se rellena el formulario;
+  siempre debes revisar los datos y completar lo que falte (por ejemplo la
+  categoría de un gasto) antes de guardar.
 - **Usuario**: tu nombre, NIF/CIF y la cuota de autónomos media mensual, que
   se descuenta como gasto en los cálculos de IRPF.
 - **Impuestos**: eliges año y trimestre y ves el IVA (modelo 303) y el pago
@@ -95,12 +105,16 @@ app/
 │   ├── auth.py           /api/auth/login, /register
 │   ├── users.py          /api/users/me (perfil: nombre, NIF/CIF, cuota de autónomos)
 │   ├── access.py         /api/access (invitaciones del dueño) y /api/gestor (canje y clientes)
+│   ├── extract.py        POST /api/documents/extract: lee una factura y propone los campos
 │   ├── invoices.py       /api/invoices/  (listar, crear, PUT y DELETE por id; siempre por owner_id)
 │   ├── expenses.py       /api/expenses/  (idem)
 │   └── taxes.py          /api/taxes/iva, /modelo130, /renta — orquesta datos reales
 ├── services/
-│   └── tax_calculator.py  Motor fiscal puro (sin DB): IVA, modelo 130, modelo 100
-└── tests/                 Tests del motor de cálculo
+│   ├── tax_calculator.py  Motor fiscal puro (sin DB): IVA, modelo 130, modelo 100
+│   ├── ocr.py             Lee PDF (capa de texto) e imágenes (Tesseract) y devuelve texto
+│   ├── invoice_parser.py  Texto de una factura -> campos (número, fecha, NIF, importes...)
+│   └── nif.py             Validación del dígito de control de NIF/CIF/NIE
+└── tests/                 Tests del motor fiscal y del analizador de facturas
 ```
 
 - **Modelo de datos**: en `Invoice` (ingreso), el *pagador* es el cliente
@@ -197,6 +211,21 @@ uvicorn app.main:app --reload    # http://localhost:8000
 ```
 
 Documentación interactiva de la API: http://localhost:8000/docs
+
+### OCR en local (Tesseract)
+
+Los **PDF con texto** se leen sin instalar nada. Para leer **imágenes y PDF
+escaneados** hace falta Tesseract con los idiomas castellano, catalán e inglés:
+
+- **Con Docker** (lo más fácil): `docker compose up web` usa la imagen del
+  backend, que ya lo trae instalado.
+- **Directamente en Windows**: instala Tesseract (por ejemplo
+  `winget install UB-Mannheim.TesseractOCR`), descarga `spa.traineddata` y
+  `cat.traineddata` de [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast)
+  a su carpeta `tessdata`, y si no está en el PATH pon su ruta en
+  `TESSERACT_CMD` (en `backend/.env`).
+- **Sin Tesseract**: la app funciona igual y, al subir una imagen, avisa de que
+  el servidor no tiene OCR.
 
 ### Ejecutar los tests del motor de cálculo
 
@@ -352,6 +381,61 @@ Fuentes: [Formatos electrónicos de los libros registro (AEAT, PDF)](https://sed
 [Pre130: importación de libros](https://sede.agenciatributaria.gob.es/Sede/ayuda/consultas-informaticas/presentacion-declaraciones-ayuda-tecnica/modelo-130/pre130-colectivo-importacion.html),
 [Colaboración social (AEAT)](https://sede.agenciatributaria.gob.es/Sede/colaborar-agencia-tributaria/colaboracion-social-presentacion-declaraciones/preguntas-frecuentes-sobre-colaboracion-social.html).
 
+## Lectura de facturas (OCR)
+
+`POST /api/documents/extract` recibe un archivo y devuelve **propuestas** de
+campos; no guarda nada (ni el archivo ni el documento). La lectura se hace en
+tu propio servidor: las facturas no se envían a servicios de terceros.
+
+**Cómo funciona**
+1. `ocr.py` detecta el tipo por el contenido del archivo. Un **PDF con texto**
+   se lee directamente de su capa de texto (exacto, sin OCR). Una **imagen** o
+   un **PDF escaneado** pasa por Tesseract (`spa+cat+eng`), con reintento con
+   preprocesado más agresivo (mediana + umbral de Otsu) y corrección de
+   orientación si la primera lectura es pobre.
+2. Del OCR se construyen tres textos a partir de las coordenadas de cada
+   palabra: por **columnas** (para que el emisor y el cliente, si están uno al
+   lado del otro, no se mezclen), por **bloques** (orden de Tesseract) y por
+   **filas** (para que cada etiqueta quede junto a su importe).
+3. `invoice_parser.py` extrae los campos por reglas (etiquetas y patrones en
+   los tres idiomas). El NIF/CIF se valida con su dígito de control y, si el
+   OCR lo ha leído mal (Z↔2, B↔8...), se prueba la corrección típica y solo se
+   acepta la que supera el dígito de control. Se deduce si es **ingreso o
+   gasto** comparando con el NIF del usuario. Los importes se cuadran
+   (base + IVA − IRPF = total) y cualquier duda sale como **aviso**.
+4. El frontend rellena el formulario y muestra los avisos y el texto leído.
+
+**Precisión medida** (facturas de muestra generadas para las pruebas, en PDF,
+en imagen limpia y en imagen "escaneada" con ruido y giro):
+- Facturas con las que se desarrolló el analizador: 99 % de los campos.
+- Facturas nuevas, con otros formatos y vocabulario, **medidas antes de
+  ajustar nada: 90 %**. Tras corregir los fallos que salieron (y que eran
+  generales, no de esas facturas) llegó al 98 %, pero ese lote ya no cuenta
+  como independiente.
+
+  El número que cabe esperar con facturas reales es, por tanto, algo inferior
+  al 98 %: por eso el resultado es siempre una propuesta que hay que revisar.
+
+**Límites conocidos**
+- Una factura con **varios tipos de IVA** se marca con un aviso y se dejan en
+  blanco base e IVA (cada documento admite un solo tipo).
+- Las fechas numéricas se interpretan como día/mes/año; una factura
+  estadounidense con mes/día/año se leería mal.
+- Los identificadores fiscales de otros países se detectan con la etiqueta
+  VAT/Tax ID pero no se pueden validar.
+- Las imágenes muy borrosas, con mucho ruido o fotografiadas de lado dan
+  lecturas poco fiables: se avisa por la confianza del OCR, y en el peor caso
+  no se devuelve ningún dato en vez de inventarlo. El PDF original siempre da
+  mejor resultado que una foto.
+- No se lee escritura a mano.
+- La **categoría** de un gasto no viene en la factura: la escribe el usuario.
+
+**Protecciones**: máximo 8 MB y 3 páginas por archivo, tipo de archivo
+comprobado por su contenido, máximo 20 lecturas cada 10 minutos por usuario
+(en memoria, se reinicia con el servidor) y las cuentas de gestor no pueden
+usarlo. El `Dockerfile` instala Tesseract, así que la imagen es más grande y
+el primer despliegue tarda más.
+
 ## Mantenimiento anual
 
 Las escalas hay que actualizarlas cada año, en `ESCALAS_AUTONOMICAS` de
@@ -377,15 +461,16 @@ Matices del cálculo del IRPF que no hay que olvidar al tocarlo:
 
 ## Próximos pasos sugeridos
 
-1. Integrar OCR para extraer datos automáticamente de PDFs/imágenes de
-   facturas (`archivo_url` ya existe en los modelos, pendiente de subida
-   real y detección).
-2. Afinar el IRPF: mínimo personal según edad y circunstancias familiares, y
+1. Afinar el IRPF: mínimo personal según edad y circunstancias familiares, y
    contemplar Navarra y País Vasco (régimen foral), que hoy no están.
-3. Exportaciones para la gestoría (el acceso de solo lectura ya está hecho):
+2. Exportaciones para la gestoría (el acceso de solo lectura ya está hecho):
    Excel oficial de libros registro de la AEAT, Excel/CSV para a3 y Sage y PDF
    resumen. Ver "Gestorías y Administración" para el plan y los campos que
    faltan (IAE, tipo de factura, concepto de gasto).
+3. Mejorar la lectura de facturas (OCR): facturas con varios tipos de IVA
+   (repartirlas en varias líneas), guardar el archivo original (`archivo_url`
+   ya existe en los modelos; requiere almacenamiento persistente en Railway) y
+   probar con facturas reales de usuarios para ampliar las reglas.
 4. Si el proyecto pasa de "feedback con amigos" a uso real con datos
    sensibles de terceros, valorar cifrado de extremo a extremo para que
    ni con acceso a la base de datos se puedan leer los documentos de cada

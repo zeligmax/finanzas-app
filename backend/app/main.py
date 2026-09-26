@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import access, auth, expenses, invoices, taxes, users
+from app.api import access, auth, expenses, extract, invoices, taxes, users
 from app.core.config import settings
 
 app = FastAPI(title=settings.PROJECT_NAME)
@@ -20,6 +20,7 @@ app.include_router(access.owner_router)
 app.include_router(access.gestor_router)
 app.include_router(invoices.router)
 app.include_router(expenses.router)
+app.include_router(extract.router)
 app.include_router(taxes.router)
 
 

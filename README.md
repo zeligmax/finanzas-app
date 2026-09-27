@@ -62,6 +62,15 @@ anual) para autónomos en España.
     archivo original, corrige los datos si hace falta, y al aprobar se crea
     la factura/gasto **directamente en la cuenta del usuario**. El archivo se
     borra al aprobar o rechazar. Ver "Cola de revisión (rol Builder)".
+12. **Contactos recurrentes y PDF de factura**: clientes y proveedores
+    guardados (sección Contactos) que rellenan nombre/NIF/dirección solos al
+    elegirlos en el formulario de un ingreso o un gasto. Las facturas
+    emitidas (ingresos) tienen ahora concepto y dirección de ambas partes, y
+    se pueden descargar en PDF (`GET /api/invoices/{id}/pdf`, generado con
+    reportlab) para enviárselas al cliente. El perfil de Usuario tiene un
+    campo de dirección fiscal que precarga el emisor al crear una factura
+    nueva. No se generan PDF de gastos: son facturas que recibes, no que
+    emites.
 
 ## Cómo funciona el proyecto
 
@@ -79,8 +88,14 @@ anual) para autónomos en España.
   factura": subes un PDF o una imagen (hasta 8 MB) y ya está — no ves ningún
   dato al momento, solo un mensaje de confirmación. Una persona (Builder) la
   revisa y, en menos de 24 h, la factura o el gasto aparece solo en tu cuenta.
-- **Usuario**: tu nombre, NIF/CIF y la cuota de autónomos media mensual, que
-  se descuenta como gasto en los cálculos de IRPF.
+  Al crear un ingreso o un gasto puedes elegir un contacto guardado (ver
+  Contactos) para rellenar nombre/NIF solo, y cada ingreso tiene un botón
+  "PDF" para descargar la factura y enviársela al cliente.
+- **Contactos**: clientes y proveedores que guardas una vez (nombre, NIF,
+  dirección) para no volver a teclearlos cada vez.
+- **Usuario**: tu nombre, NIF/CIF, dirección fiscal (se usa para precargar el
+  emisor en facturas nuevas) y la cuota de autónomos media mensual, que se
+  descuenta como gasto en los cálculos de IRPF.
 - **Impuestos**: eliges año y trimestre y ves el IVA (modelo 303) y el pago
   fraccionado de IRPF (modelo 130) de ese periodo, calculados con tus
   documentos reales, el cómputo total a abonar y un resumen de la Renta.
@@ -116,32 +131,42 @@ app/
 │   ├── security.py       hash/verify de contraseñas (bcrypt), JWT
 │   └── deps.py           get_current_user (del JWT) / get_current_db_user (fila de User)
 ├── db/session.py         engine, SessionLocal, Base
-├── models/models.py      User, Invoice, Expense, GestorAccess, DocumentoPendiente (SQLAlchemy)
-├── schemas/               Pydantic: Invoice, Expense, perfil de usuario, cola de Builder
+├── models/models.py      User, Invoice, Expense, Contacto, GestorAccess, DocumentoPendiente (SQLAlchemy)
+├── schemas/               Pydantic: Invoice, Expense, Contacto, perfil de usuario, cola de Builder
 ├── api/
 │   ├── auth.py           /api/auth/login, /register
-│   ├── users.py          /api/users/me (perfil: nombre, NIF/CIF, cuota de autónomos)
+│   ├── users.py          /api/users/me (perfil: nombre, NIF/CIF, dirección, cuota de autónomos)
 │   ├── access.py         /api/access (invitaciones del dueño) y /api/gestor (canje y clientes)
+│   ├── contactos.py      /api/contactos/ (clientes/proveedores guardados, CRUD por owner_id)
 │   ├── documents.py      POST /api/documents/upload: analiza y deja el documento pendiente
 │   ├── builder.py        /api/builder/queue (listar, ver, ver archivo, aprobar, rechazar)
-│   ├── invoices.py       /api/invoices/  (listar, crear, PUT y DELETE por id; siempre por owner_id)
+│   ├── invoices.py       /api/invoices/ (listar, crear, PUT, DELETE, GET /{id}/pdf; siempre por owner_id)
 │   ├── expenses.py       /api/expenses/  (idem)
 │   └── taxes.py          /api/taxes/iva, /modelo130, /renta — orquesta datos reales
 ├── services/
 │   ├── tax_calculator.py  Motor fiscal puro (sin DB): IVA, modelo 130, modelo 100
 │   ├── ocr.py             Lee PDF (capa de texto) e imágenes (Tesseract) y devuelve texto
 │   ├── invoice_parser.py  Texto de una factura -> campos (número, fecha, NIF, importes...)
+│   ├── invoice_pdf.py     Genera el PDF de un ingreso con reportlab (sin dependencias del sistema)
 │   └── nif.py             Validación del dígito de control de NIF/CIF/NIE
 └── tests/                 Tests del motor fiscal y del analizador de facturas
 ```
 
 - **Modelo de datos**: en `Invoice` (ingreso), el *pagador* es el cliente
-  (`cliente_nombre`/`cliente_nif`) y el *cobrador* eres tú, el emisor
-  (`emisor_nombre`/`emisor_nif`). En `Expense` (gasto), el *cobrador* es el
-  proveedor (`proveedor_nombre`/`proveedor_nif`) y el *pagador* eres tú
-  (`pagador_nombre`/`pagador_nif`). Ambos modelos son independientes a
-  propósito (no un único modelo "Documento") para poder llevar por separado
-  el histórico de ingresos y gastos de cara a la Renta y los trimestrales.
+  (`cliente_nombre`/`cliente_nif`/`cliente_direccion`) y el *cobrador* eres
+  tú, el emisor (`emisor_nombre`/`emisor_nif`/`emisor_direccion`), más
+  `concepto` (descripción para el PDF). En `Expense` (gasto), el *cobrador*
+  es el proveedor (`proveedor_nombre`/`proveedor_nif`) y el *pagador* eres tú
+  (`pagador_nombre`/`pagador_nif`) — sin dirección, porque no se genera PDF
+  de gastos. Ambos modelos son independientes a propósito (no un único
+  modelo "Documento") para poder llevar por separado el histórico de
+  ingresos y gastos de cara a la Renta y los trimestrales.
+- **Contactos** (`Contacto`): una sola tabla con un campo `tipo`
+  (`cliente`/`proveedor`), a diferencia de Invoice/Expense — aquí sí tiene
+  sentido unificar, porque un contacto no es un movimiento contable, solo una
+  plantilla de nombre/NIF/dirección. Al elegirlo en el formulario, sus datos
+  se copian a la factura/gasto (igual que ya pasaba con emisor/cliente/
+  proveedor): editar o borrar un contacto no toca los documentos ya creados.
 - **Motor fiscal** (`services/tax_calculator.py`): funciones puras, sin
   tocar la base de datos, totalmente testeadas. `api/taxes.py` es la capa
   que agrega las facturas/gastos reales de la BD y se los pasa a estas
@@ -158,7 +183,14 @@ app/
   `/api/expenses/{id}` buscan el documento por id **y** por `owner_id`. Si no
   existe o es de otro usuario devuelven 404 (no 403), para no revelar que el
   id existe. `PUT` reemplaza todos los campos editables (mismo esquema que el
-  alta).
+  alta). `GET /{id}/pdf` sigue la misma comprobación de propiedad — un gestor
+  no puede descargar el PDF de un cliente, solo el propio dueño (a
+  diferencia de los endpoints de lectura, no usa `get_target_owner`).
+- **PDF con reportlab**: se eligió por no tener dependencias del sistema (a
+  diferencia de Tesseract para el OCR o de una alternativa HTML→PDF como
+  WeasyPrint, que necesitaría instalar Pango/Cairo en el `Dockerfile`).
+  `services/invoice_pdf.py` construye el documento con `reportlab.platypus`
+  (tablas y párrafos) a partir del `Invoice`, sin tocar la base de datos.
 - **Acceso de gestores**: tabla `gestor_access` (dueño, gestor, código,
   estado `pendiente`/`aceptado`, caducidad). Se vincula con un **código de un
   solo uso** y no por correo, porque la app no verifica correos y cualquiera
@@ -216,7 +248,8 @@ src/
     ├── UserPage.jsx       Datos del usuario y cuota de autónomos
     ├── AccesoPage.jsx     (dueño) invitaciones y accesos de gestores
     ├── ClientesPage.jsx   (gestor) canjear códigos y elegir cliente
-    ├── DocumentsPage.jsx  Alta de ingresos/gastos + listados + enviar factura a revisión
+    ├── ContactosPage.jsx  Clientes/proveedores guardados (CRUD)
+    ├── DocumentsPage.jsx  Alta de ingresos/gastos + listados + enviar factura a revisión + PDF
     ├── TaxesPage.jsx      IVA + modelo 130 por año/trimestre
     └── RentaPage.jsx      Modelo 130 (x4) + modelo 100 por año
 ```
@@ -582,23 +615,20 @@ Matices del cálculo del IRPF que no hay que olvidar al tocarlo:
    corrijan los Builders. Ahora que ya se guarda el archivo mientras está
    pendiente, un buen paso es que la propia cola sirva de conjunto de
    entrenamiento/prueba.
-4. Contactos recurrentes (clientes/proveedores guardados): al crear un
-   ingreso o gasto, elegir un contacto ya dado de alta para que rellene
-   nombre y NIF solos y solo haga falta cambiar la base imponible.
-5. Cuando haya volumen, dar a los Builders alguna manera de repartirse la
+4. Cuando haya volumen, dar a los Builders alguna manera de repartirse la
    cola (asignarse un documento) para no revisarlo dos personas a la vez, y
    quizás avisar al usuario si su documento se rechaza (hoy el rechazo no le
    llega, solo queda en el `estado` del documento).
-6. Si el proyecto pasa de "feedback con amigos" a uso real con datos
+5. Si el proyecto pasa de "feedback con amigos" a uso real con datos
    sensibles de terceros, valorar cifrado de extremo a extremo para que
    ni con acceso a la base de datos se puedan leer los documentos de cada
    usuario.
-7. Verificar el correo al registrarse (correo de confirmación con enlace/
+6. Verificar el correo al registrarse (correo de confirmación con enlace/
    código). Hoy `POST /api/auth/register` no comprueba que el correo exista
    ni que sea del que se registra, así que cualquiera puede darse de alta con
    un correo ajeno. Hace falta un proveedor de envío de correo (SMTP, o un
    servicio como Postmark/Resend/SES) y una plantilla en castellano.
-8. Autenticación en dos pasos (2FA), sobre todo para las cuentas Builder
+7. Autenticación en dos pasos (2FA), sobre todo para las cuentas Builder
    (tienen acceso a documentos de todos los usuarios) y recomendable también
    para cuentas normales. Lo habitual es TOTP (Google Authenticator/Authy) o
    un código por correo/SMS; requiere guardar un secreto por usuario y un

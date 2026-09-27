@@ -7,6 +7,7 @@ import DocumentsPage from "./pages/DocumentsPage";
 import UserPage from "./pages/UserPage";
 import AccesoPage from "./pages/AccesoPage";
 import ClientesPage from "./pages/ClientesPage";
+import ContactosPage from "./pages/ContactosPage";
 import LoginScreen from "./pages/LoginScreen";
 import BuilderLoginScreen from "./pages/BuilderLoginScreen";
 import BuilderQueuePage from "./pages/BuilderQueuePage";
@@ -158,6 +159,11 @@ export default function App() {
                     <NavLink to="/documents" className={navClass}>
                       Documentos
                     </NavLink>
+                    {!esGestor && (
+                      <NavLink to="/contactos" className={navClass}>
+                        Contactos
+                      </NavLink>
+                    )}
                     <NavLink to="/taxes" className={navClass}>
                       Impuestos
                     </NavLink>
@@ -180,7 +186,8 @@ export default function App() {
                 <main>
                   <Routes>
                     <Route path="/" element={<Home />} />
-                    <Route path="/documents" element={datos(<DocumentsPage soloLectura={esGestor} />)} />
+                    <Route path="/documents" element={datos(<DocumentsPage soloLectura={esGestor} perfil={perfil} />)} />
+                    <Route path="/contactos" element={<ContactosPage />} />
                     <Route path="/taxes" element={datos(<TaxesPage />)} />
                     <Route path="/renta" element={datos(<RentaPage />)} />
                     <Route path="/usuario" element={<UserPage />} />

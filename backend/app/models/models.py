@@ -24,6 +24,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     full_name = Column(String, nullable=True)
     nif = Column(String, nullable=True)
+    direccion = Column(String, nullable=True)  # dirección fiscal, para precargar el emisor en facturas nuevas
     cuota_autonomos_mensual = Column(Float, nullable=False, default=0.0, server_default="0")
     role = Column(Enum(RoleEnum), default=RoleEnum.team, nullable=False)
     is_active = Column(Boolean, default=True)
@@ -78,6 +79,25 @@ class DocumentoPendiente(Base):
     motivo_rechazo = Column(String, nullable=True)
 
 
+class Contacto(Base):
+    """
+    Cliente o proveedor recurrente, guardado por el usuario para no volver a teclear
+    su nombre/NIF cada vez. Es solo una plantilla de partida: al usarlo en una factura
+    o gasto, sus datos se copian ahí (igual que emisor/cliente/proveedor ya funcionan),
+    así que borrar o editar un contacto no afecta a los documentos ya creados.
+    """
+
+    __tablename__ = "contactos"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    tipo = Column(String, nullable=False)  # "cliente" | "proveedor"
+    nombre = Column(String, nullable=False)
+    nif = Column(String, nullable=True)
+    direccion = Column(String, nullable=True)
+
+
 class Invoice(Base):
     """Factura emitida (venta)."""
 
@@ -88,14 +108,17 @@ class Invoice(Base):
 
     numero = Column(String, nullable=False)
     fecha = Column(Date, nullable=False, default=date.today)
+    concepto = Column(String, nullable=True)  # descripción del servicio/producto, para el PDF
 
     # Pagador: quien paga la factura (el cliente)
     cliente_nombre = Column(String, nullable=False)
     cliente_nif = Column(String, nullable=True)
+    cliente_direccion = Column(String, nullable=True)
 
     # Cobrador: quien la emite y cobra (el propio autónomo/empresa)
     emisor_nombre = Column(String, nullable=False)
     emisor_nif = Column(String, nullable=True)
+    emisor_direccion = Column(String, nullable=True)
 
     base_imponible = Column(Float, nullable=False, default=0.0)
     tipo_iva = Column(Float, nullable=False, default=21.0)  # 0 si está exenta

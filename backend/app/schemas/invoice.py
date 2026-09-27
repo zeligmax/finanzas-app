@@ -8,12 +8,15 @@ from pydantic import BaseModel, ConfigDict
 class InvoiceCreate(BaseModel):
     numero: str
     fecha: date
+    concepto: Optional[str] = None
 
     cliente_nombre: str
     cliente_nif: Optional[str] = None
+    cliente_direccion: Optional[str] = None
 
     emisor_nombre: str
     emisor_nif: Optional[str] = None
+    emisor_direccion: Optional[str] = None
 
     base_imponible: float
     tipo_iva: float = 21.0

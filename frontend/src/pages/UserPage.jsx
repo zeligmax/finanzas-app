@@ -17,6 +17,7 @@ export default function UserPage() {
         setForm({
           full_name: res.data.full_name || "",
           nif: res.data.nif || "",
+          direccion: res.data.direccion || "",
           cuota_autonomos_mensual: res.data.cuota_autonomos_mensual,
         });
       })
@@ -71,6 +72,16 @@ export default function UserPage() {
             <label>NIF/CIF</label>
             <input value={form.nif} onChange={set("nif")} />
             {aviso && <small className="warning">{aviso}</small>}
+          </div>
+
+          <div className="field">
+            <label>Dirección fiscal</label>
+            <input
+              value={form.direccion}
+              onChange={set("direccion")}
+              placeholder="Calle, número, código postal, ciudad"
+            />
+            <small className="muted">Se usa para precargar el emisor al crear una factura nueva.</small>
           </div>
 
           <div className="field">

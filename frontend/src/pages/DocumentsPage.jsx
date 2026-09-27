@@ -7,10 +7,13 @@ const today = () => new Date().toISOString().slice(0, 10);
 const emptyInvoice = {
   numero: "",
   fecha: today(),
+  concepto: "",
   cliente_nombre: "",
   cliente_nif: "",
+  cliente_direccion: "",
   emisor_nombre: "",
   emisor_nif: "",
+  emisor_direccion: "",
   base_imponible: "",
   tipo_iva: 21,
   retencion_irpf_pct: 0,
@@ -100,6 +103,40 @@ function EnviarFactura({ tipo }) {
   );
 }
 
+function ContactoSelector({ tipo, onElegir }) {
+  const [items, setItems] = useState(null);
+
+  useEffect(() => {
+    api
+      .get("/api/contactos/", { params: { tipo } })
+      .then((res) => setItems(res.data))
+      .catch(() => setItems([]));
+  }, [tipo]);
+
+  if (!items || items.length === 0) return null;
+
+  return (
+    <div className="field">
+      <label>{tipo === "cliente" ? "Elegir cliente guardado" : "Elegir proveedor guardado"}</label>
+      <select
+        value=""
+        onChange={(e) => {
+          const contacto = items.find((c) => c.id === e.target.value);
+          if (contacto) onElegir(contacto);
+          e.target.value = "";
+        }}
+      >
+        <option value="">— Seleccionar —</option>
+        {items.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.nombre}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function Field({ label, warning, children }) {
   return (
     <div className="field">
@@ -128,8 +165,17 @@ function FormActions({ editing, saving, textoAnadir, onCancel, error }) {
   );
 }
 
-function InvoiceForm({ initial, onSaved, onCancel }) {
-  const [form, setForm] = useState(initial ? toForm(emptyInvoice, initial) : emptyInvoice);
+function InvoiceForm({ initial, perfil, onSaved, onCancel }) {
+  const [form, setForm] = useState(
+    initial
+      ? toForm(emptyInvoice, initial)
+      : {
+          ...emptyInvoice,
+          emisor_nombre: perfil?.full_name || "",
+          emisor_nif: perfil?.nif || "",
+          emisor_direccion: perfil?.direccion || "",
+        }
+  );
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -163,12 +209,24 @@ function InvoiceForm({ initial, onSaved, onCancel }) {
       <Field label="Fecha">
         <input type="date" value={form.fecha} onChange={set("fecha")} required />
       </Field>
+      <Field label="Concepto (para el PDF)">
+        <input value={form.concepto} onChange={set("concepto")} placeholder="Ej. Diseño web - marzo 2026" />
+      </Field>
 
+      <ContactoSelector
+        tipo="cliente"
+        onElegir={(c) =>
+          setForm({ ...form, cliente_nombre: c.nombre, cliente_nif: c.nif || "", cliente_direccion: c.direccion || "" })
+        }
+      />
       <Field label="Nombre pagador (cliente)">
         <input value={form.cliente_nombre} onChange={set("cliente_nombre")} required />
       </Field>
       <Field label="NIF/CIF pagador" warning={nifAviso(form.cliente_nif)}>
         <input value={form.cliente_nif} onChange={set("cliente_nif")} />
+      </Field>
+      <Field label="Dirección pagador">
+        <input value={form.cliente_direccion} onChange={set("cliente_direccion")} />
       </Field>
 
       <Field label="Nombre cobrador (emisor)">
@@ -176,6 +234,9 @@ function InvoiceForm({ initial, onSaved, onCancel }) {
       </Field>
       <Field label="NIF/CIF cobrador" warning={nifAviso(form.emisor_nif)}>
         <input value={form.emisor_nif} onChange={set("emisor_nif")} />
+      </Field>
+      <Field label="Dirección cobrador">
+        <input value={form.emisor_direccion} onChange={set("emisor_direccion")} />
       </Field>
 
       <Field label="Base imponible (€)">
@@ -235,6 +296,10 @@ function ExpenseForm({ initial, onSaved, onCancel }) {
         <input type="date" value={form.fecha} onChange={set("fecha")} required />
       </Field>
 
+      <ContactoSelector
+        tipo="proveedor"
+        onElegir={(c) => setForm({ ...form, proveedor_nombre: c.nombre, proveedor_nif: c.nif || "" })}
+      />
       <Field label="Nombre cobrador (proveedor)">
         <input value={form.proveedor_nombre} onChange={set("proveedor_nombre")} required />
       </Field>
@@ -274,10 +339,11 @@ function ExpenseForm({ initial, onSaved, onCancel }) {
   );
 }
 
-function RowActions({ onEdit, onDelete }) {
+function RowActions({ onEdit, onDelete, extra }) {
   return (
     <td>
       <div className="actions">
+        {extra}
         <button type="button" className="secondary small" onClick={onEdit}>
           Editar
         </button>
@@ -289,7 +355,7 @@ function RowActions({ onEdit, onDelete }) {
   );
 }
 
-function InvoiceList({ items, editingId, onEdit, onDelete, soloLectura }) {
+function InvoiceList({ items, editingId, onEdit, onDelete, onDescargar, soloLectura }) {
   if (!items.length) return <p className="muted">Todavía no hay ingresos registrados.</p>;
   return (
     <table>
@@ -310,7 +376,17 @@ function InvoiceList({ items, editingId, onEdit, onDelete, soloLectura }) {
             <td>{f.tipo_iva}%</td>
             <td>{f.retencion_irpf_pct}%</td>
             <td>{f.total.toFixed(2)} €</td>
-            {!soloLectura && <RowActions onEdit={() => onEdit(f)} onDelete={() => onDelete(f)} />}
+            {!soloLectura && (
+              <RowActions
+                onEdit={() => onEdit(f)}
+                onDelete={() => onDelete(f)}
+                extra={
+                  <button type="button" className="secondary small" onClick={() => onDescargar(f)}>
+                    PDF
+                  </button>
+                }
+              />
+            )}
           </tr>
         ))}
       </tbody>
@@ -347,7 +423,7 @@ function ExpenseList({ items, editingId, onEdit, onDelete, soloLectura }) {
   );
 }
 
-export default function DocumentsPage({ soloLectura = false }) {
+export default function DocumentsPage({ soloLectura = false, perfil }) {
   const [tab, setTab] = useState("ingreso");
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
@@ -378,6 +454,23 @@ export default function DocumentsPage({ soloLectura = false }) {
   const guardado = () => {
     setEditing(null);
     load();
+  };
+
+  const descargarPdf = async (factura) => {
+    setError(null);
+    try {
+      const res = await api.get(`/api/invoices/${factura.id}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `factura-${factura.numero}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    }
   };
 
   const borrar = async (item) => {
@@ -416,6 +509,7 @@ export default function DocumentsPage({ soloLectura = false }) {
           <InvoiceForm
             key={editing ? editing.id : "nuevo"}
             initial={editing}
+            perfil={perfil}
             onSaved={guardado}
             onCancel={() => setEditing(null)}
           />
@@ -431,7 +525,14 @@ export default function DocumentsPage({ soloLectura = false }) {
       {tab === "ingreso" ? (
         <section className="card">
           <h2>Ingresos registrados</h2>
-          <InvoiceList items={invoices} editingId={editing?.id} onEdit={editar} onDelete={borrar} soloLectura={soloLectura} />
+          <InvoiceList
+            items={invoices}
+            editingId={editing?.id}
+            onEdit={editar}
+            onDelete={borrar}
+            onDescargar={descargarPdf}
+            soloLectura={soloLectura}
+          />
         </section>
       ) : (
         <section className="card">

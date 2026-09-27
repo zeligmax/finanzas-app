@@ -1,13 +1,15 @@
+import re
 import uuid
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_db_user, get_target_owner
 from app.db.session import get_db
 from app.models.models import Invoice, User
 from app.schemas.invoice import InvoiceCreate, InvoiceOut
+from app.services.invoice_pdf import generar_pdf_factura
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
@@ -68,3 +70,19 @@ def borrar_factura(
 ):
     db.delete(_factura_propia(db, owner, factura_id))
     db.commit()
+
+
+@router.get("/{factura_id}/pdf")
+def descargar_pdf_factura(
+    factura_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    owner: User = Depends(get_current_db_user),
+):
+    factura = _factura_propia(db, owner, factura_id)
+    pdf = generar_pdf_factura(factura)
+    nombre_archivo = re.sub(r"[^A-Za-z0-9._-]+", "-", factura.numero).strip("-") or "factura"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="factura-{nombre_archivo}.pdf"'},
+    )

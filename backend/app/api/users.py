@@ -22,6 +22,7 @@ def actualizar_perfil(
 ):
     owner.full_name = (payload.full_name or "").strip() or None
     owner.nif = (payload.nif or "").strip().upper() or None
+    owner.direccion = (payload.direccion or "").strip() or None
     owner.cuota_autonomos_mensual = payload.cuota_autonomos_mensual
     db.add(owner)
     db.commit()

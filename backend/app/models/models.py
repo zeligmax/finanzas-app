@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Enum, Float, ForeignKey, String
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, Enum, Float, ForeignKey, LargeBinary, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -13,6 +13,7 @@ class RoleEnum(str, enum.Enum):
     owner = "owner"
     team = "team"
     gestor = "gestor"
+    builder = "builder"  # personal interno: revisa y corrige las facturas que suben los usuarios
 
 
 class User(Base):
@@ -46,6 +47,35 @@ class GestorAccess(Base):
     estado = Column(String, nullable=False, default="pendiente")  # "pendiente" | "aceptado"
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
+
+
+class DocumentoPendiente(Base):
+    """
+    Un PDF/imagen que un usuario ha subido para que un Builder lo revise.
+
+    El usuario solo lo envía: no ve el resultado del análisis. Un Builder lo revisa,
+    corrige los datos que hagan falta y, al aprobarlo, se crea automáticamente la
+    factura o el gasto en la cuenta del usuario. El archivo se guarda en la base de
+    datos (bytea) solo mientras está pendiente; se borra al aprobar o rechazar.
+    """
+
+    __tablename__ = "documentos_pendientes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    tipo = Column(String, nullable=False)  # "ingreso" | "gasto", elegido por el usuario al subir
+    nombre_archivo = Column(String, nullable=False)
+    tipo_archivo = Column(String, nullable=False)  # mime type
+    archivo = Column(LargeBinary, nullable=True)  # se borra al aprobar/rechazar
+
+    datos_extraidos = Column(JSON, nullable=True)  # lo que detectó el analizador, de partida
+
+    estado = Column(String, nullable=False, default="pendiente")  # "pendiente" | "aprobado" | "rechazado"
+    creado_en = Column(DateTime, nullable=False, default=datetime.utcnow)
+    revisado_por = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    revisado_en = Column(DateTime, nullable=True)
+    motivo_rechazo = Column(String, nullable=True)
 
 
 class Invoice(Base):

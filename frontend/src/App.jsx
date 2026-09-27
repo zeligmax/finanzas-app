@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Link, NavLink } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, NavLink, Navigate } from "react-router-dom";
 import api, { clienteActivoGuardado } from "./api/client";
 import TaxesPage from "./pages/TaxesPage";
 import RentaPage from "./pages/RentaPage";
@@ -7,7 +7,10 @@ import DocumentsPage from "./pages/DocumentsPage";
 import UserPage from "./pages/UserPage";
 import AccesoPage from "./pages/AccesoPage";
 import ClientesPage from "./pages/ClientesPage";
-import Login from "./pages/Login";
+import LoginScreen from "./pages/LoginScreen";
+import BuilderLoginScreen from "./pages/BuilderLoginScreen";
+import BuilderQueuePage from "./pages/BuilderQueuePage";
+import BuilderReviewPage from "./pages/BuilderReviewPage";
 import Home from "./pages/Home";
 
 export default function App() {
@@ -40,6 +43,7 @@ export default function App() {
   }, [token]);
 
   const esGestor = perfil?.role === "gestor";
+  const esBuilder = perfil?.role === "builder";
 
   useEffect(() => {
     if (perfil && !esGestor && clienteActivo) elegirCliente(null);
@@ -57,12 +61,8 @@ export default function App() {
 
   const navClass = ({ isActive }) => (isActive ? "active" : undefined);
 
-  const login = <Login onLogin={handleLogin} />;
-
   // Páginas de datos: un gestor necesita haber elegido a un cliente y las ve en solo lectura.
   const datos = (pagina) => {
-    if (!token) return login;
-    if (!perfil) return <p className="muted">Cargando...</p>;
     if (esGestor && !clienteActivo) {
       return (
         <div className="card">
@@ -88,70 +88,117 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="app">
-        <header className="app-header">
-          <h1>
-            <Link to="/">Finanzas Autónomo</Link>
-          </h1>
-          <nav className="nav">
-            <NavLink to="/" className={navClass}>
-              Inicio
-            </NavLink>
-            {esGestor && (
-              <NavLink to="/clientes" className={navClass}>
-                Clientes
-              </NavLink>
-            )}
-            <NavLink to="/documents" className={navClass}>
-              Documentos
-            </NavLink>
-            <NavLink to="/taxes" className={navClass}>
-              Impuestos
-            </NavLink>
-            <NavLink to="/renta" className={navClass}>
-              Renta
-            </NavLink>
-            <NavLink to="/usuario" className={navClass}>
-              Usuario
-            </NavLink>
-            {token && !esGestor && (
-              <NavLink to="/acceso" className={navClass}>
-                Gestor
-              </NavLink>
-            )}
-            <NavLink to="/login" className={navClass}>
-              Login
-            </NavLink>
-            {token && (
-              <button className="secondary" onClick={handleLogout}>
-                Cerrar sesión
-              </button>
-            )}
-          </nav>
-        </header>
+      <Routes>
+        {!token && (
+          <>
+            <Route path="/builder-login" element={<BuilderLoginScreen onLogin={handleLogin} />} />
+            <Route path="*" element={<LoginScreen onLogin={handleLogin} />} />
+          </>
+        )}
 
-        <main>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/documents" element={datos(<DocumentsPage soloLectura={esGestor} />)} />
-            <Route path="/taxes" element={datos(<TaxesPage />)} />
-            <Route path="/renta" element={datos(<RentaPage />)} />
-            <Route path="/usuario" element={token ? <UserPage /> : login} />
-            <Route path="/acceso" element={token ? <AccesoPage /> : login} />
-            <Route
-              path="/clientes"
-              element={
-                token ? (
-                  <ClientesPage esGestor={esGestor} clienteActivo={clienteActivo} onElegirCliente={elegirCliente} />
-                ) : (
-                  login
-                )
-              }
-            />
-            <Route path="/login" element={login} />
-          </Routes>
-        </main>
-      </div>
+        {token && !perfil && (
+          <Route
+            path="*"
+            element={
+              <div className="app">
+                <p className="muted">Cargando...</p>
+              </div>
+            }
+          />
+        )}
+
+        {token && perfil && esBuilder && (
+          <Route
+            path="*"
+            element={
+              <div className="app">
+                <header className="app-header">
+                  <h1>
+                    <Link to="/builder">Finanzas Autónomo · Builder</Link>
+                  </h1>
+                  <nav className="nav">
+                    <NavLink to="/builder" className={navClass} end>
+                      Cola
+                    </NavLink>
+                    <button className="secondary" onClick={handleLogout}>
+                      Cerrar sesión
+                    </button>
+                  </nav>
+                </header>
+                <main>
+                  <Routes>
+                    <Route path="/builder" element={<BuilderQueuePage />} />
+                    <Route path="/builder/:id" element={<BuilderReviewPage />} />
+                    <Route path="*" element={<Navigate to="/builder" replace />} />
+                  </Routes>
+                </main>
+              </div>
+            }
+          />
+        )}
+
+        {token && perfil && !esBuilder && (
+          <Route
+            path="*"
+            element={
+              <div className="app">
+                <header className="app-header">
+                  <h1>
+                    <Link to="/">Finanzas Autónomo</Link>
+                  </h1>
+                  <nav className="nav">
+                    <NavLink to="/" className={navClass} end>
+                      Inicio
+                    </NavLink>
+                    {esGestor && (
+                      <NavLink to="/clientes" className={navClass}>
+                        Clientes
+                      </NavLink>
+                    )}
+                    <NavLink to="/documents" className={navClass}>
+                      Documentos
+                    </NavLink>
+                    <NavLink to="/taxes" className={navClass}>
+                      Impuestos
+                    </NavLink>
+                    <NavLink to="/renta" className={navClass}>
+                      Renta
+                    </NavLink>
+                    <NavLink to="/usuario" className={navClass}>
+                      Usuario
+                    </NavLink>
+                    {!esGestor && (
+                      <NavLink to="/acceso" className={navClass}>
+                        Gestor
+                      </NavLink>
+                    )}
+                    <button className="secondary" onClick={handleLogout}>
+                      Cerrar sesión
+                    </button>
+                  </nav>
+                </header>
+                <main>
+                  <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/documents" element={datos(<DocumentsPage soloLectura={esGestor} />)} />
+                    <Route path="/taxes" element={datos(<TaxesPage />)} />
+                    <Route path="/renta" element={datos(<RentaPage />)} />
+                    <Route path="/usuario" element={<UserPage />} />
+                    <Route path="/acceso" element={<AccesoPage />} />
+                    <Route
+                      path="/clientes"
+                      element={
+                        <ClientesPage esGestor={esGestor} clienteActivo={clienteActivo} onElegirCliente={elegirCliente} />
+                      }
+                    />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </main>
+              </div>
+            }
+          />
+        )}
+      </Routes>
     </BrowserRouter>
   );
 }

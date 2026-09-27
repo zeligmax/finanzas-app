@@ -68,6 +68,13 @@ def get_target_owner(
     return cliente
 
 
+def get_current_builder(user: User = Depends(get_current_db_user)) -> User:
+    """Solo cuentas Builder (personal interno). Las crea un script, no hay autorregistro."""
+    if user.role != RoleEnum.builder:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo cuentas Builder pueden acceder")
+    return user
+
+
 def require_role(*allowed_roles: str):
     def checker(user: dict = Depends(get_current_user)) -> dict:
         if user["role"] not in allowed_roles:

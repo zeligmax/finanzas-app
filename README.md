@@ -48,26 +48,37 @@ anual) para autónomos en España.
    documentos, impuestos y Renta de ese cliente, hasta que el cliente lo
    revoque. Antes se investigó qué software usan las gestorías y cómo se
    relacionan con Hacienda (ver "Gestorías y Administración").
-10. **Lectura automática de facturas (OCR)**: en Documentos se puede subir un
-    PDF o una imagen de una factura, en castellano, catalán o inglés, y la app
-    rellena el formulario con lo que lee (número, fecha, NIF/nombre del emisor
-    y del cliente, base, IVA, IRPF y total) para que el usuario lo revise antes
-    de guardar. Se decidió OCR local con Tesseract, sin enviar las facturas a
-    ningún servicio externo, y sin guardar el archivo (ver "Lectura de facturas
-    (OCR)" para cómo funciona y sus límites).
+10. **Lectura automática de facturas (OCR)**: motor de análisis por reglas
+    (castellano, catalán, inglés) con Tesseract en local, sin enviar nada a
+    servicios externos (ver "Lectura de facturas (OCR)" para cómo funciona y
+    sus límites).
+11. **Cola de revisión con rol Builder**: se sustituyó el flujo anterior (el
+    usuario veía el resultado del OCR al momento y lo guardaba él mismo) por
+    uno con revisión humana. El usuario solo **envía** el PDF/imagen; el
+    archivo y lo que detectó el analizador se guardan como pendientes. Un
+    **Builder** (cuenta de personal interno, sin autorregistro — se crea con
+    `scripts/create_builder_user.py`) tiene una pantalla de login aparte
+    (botón "Builder" en la pantalla de login normal) y una cola donde ve el
+    archivo original, corrige los datos si hace falta, y al aprobar se crea
+    la factura/gasto **directamente en la cuenta del usuario**. El archivo se
+    borra al aprobar o rechazar. Ver "Cola de revisión (rol Builder)".
 
 ## Cómo funciona el proyecto
 
 ### A nivel usuario
 
+- **Pantalla inicial**: un login normal (registro/inicio de sesión). Arriba a
+  la derecha hay un botón **"Builder"**, que lleva a un login aparte solo para
+  cuentas de personal interno (ver más abajo). Con una cuenta normal, todo
+  sigue igual que siempre.
 - **Login / Crear cuenta**: cualquiera puede registrarse con su correo y
   contraseña. No hace falta invitación ni aprobación.
 - **Documentos**: pestañas "Ingreso" (una factura que emites y cobras) y
   "Gasto" (una factura que recibes y pagas). Cada uno queda en su propio
-  listado, desde donde puedes editarlo o borrarlo. Encima hay "Leer una
-  factura": subes un PDF o una imagen (hasta 8 MB) y se rellena el formulario;
-  siempre debes revisar los datos y completar lo que falte (por ejemplo la
-  categoría de un gasto) antes de guardar.
+  listado, desde donde puedes editarlo o borrarlo. Encima hay "Enviar una
+  factura": subes un PDF o una imagen (hasta 8 MB) y ya está — no ves ningún
+  dato al momento, solo un mensaje de confirmación. Una persona (Builder) la
+  revisa y, en menos de 24 h, la factura o el gasto aparece solo en tu cuenta.
 - **Usuario**: tu nombre, NIF/CIF y la cuota de autónomos media mensual, que
   se descuenta como gasto en los cálculos de IRPF.
 - **Impuestos**: eliges año y trimestre y ves el IVA (modelo 303) y el pago
@@ -83,6 +94,12 @@ anual) para autónomos en España.
 - **Si eres gestor** (casilla al crear la cuenta): en Clientes canjeas el
   código de cada cliente y eliges a quién consultar. Todo lo ves en solo
   lectura, con un aviso visible de a quién estás viendo.
+- **Si eres Builder**: entras por el botón "Builder" de la pantalla de login,
+  con una cuenta que se crea por script (no hay autorregistro). Ves una cola
+  de documentos pendientes, con el archivo original y lo que detectó el
+  analizador; corriges lo que haga falta y al aprobar se crea la
+  factura/gasto en la cuenta de ese usuario. También puedes rechazar un
+  documento (con un motivo opcional).
 - **Privacidad**: cada usuario solo ve sus propias facturas y gastos. La única
   excepción es un gestor al que tú hayas dado acceso, que puedes quitar en
   cualquier momento.
@@ -99,13 +116,14 @@ app/
 │   ├── security.py       hash/verify de contraseñas (bcrypt), JWT
 │   └── deps.py           get_current_user (del JWT) / get_current_db_user (fila de User)
 ├── db/session.py         engine, SessionLocal, Base
-├── models/models.py      User, Invoice, Expense, GestorAccess (SQLAlchemy)
-├── schemas/               Pydantic: Invoice, Expense y perfil de usuario
+├── models/models.py      User, Invoice, Expense, GestorAccess, DocumentoPendiente (SQLAlchemy)
+├── schemas/               Pydantic: Invoice, Expense, perfil de usuario, cola de Builder
 ├── api/
 │   ├── auth.py           /api/auth/login, /register
 │   ├── users.py          /api/users/me (perfil: nombre, NIF/CIF, cuota de autónomos)
 │   ├── access.py         /api/access (invitaciones del dueño) y /api/gestor (canje y clientes)
-│   ├── extract.py        POST /api/documents/extract: lee una factura y propone los campos
+│   ├── documents.py      POST /api/documents/upload: analiza y deja el documento pendiente
+│   ├── builder.py        /api/builder/queue (listar, ver, ver archivo, aprobar, rechazar)
 │   ├── invoices.py       /api/invoices/  (listar, crear, PUT y DELETE por id; siempre por owner_id)
 │   ├── expenses.py       /api/expenses/  (idem)
 │   └── taxes.py          /api/taxes/iva, /modelo130, /renta — orquesta datos reales
@@ -151,14 +169,32 @@ app/
   cálculos de impuestos); los de escritura usan siempre `get_current_db_user`,
   así un gestor no puede modificar datos de un cliente. Cualquier caso no
   permitido responde 404.
-- **Auth**: JWT (`python-jose`) con contraseñas en bcrypt. Hay un campo
-  `role` en `User` (`owner` / `team` / `gestor`) pensado para el futuro rol
-  de solo-lectura, pero hoy todos los endpoints solo comprueban que hay un
-  usuario autenticado y filtran por su `owner_id`.
-- **Migraciones**: Alembic, con una única migración baseline
-  (`esquema inicial`) que crea las tres tablas desde cero. El `Dockerfile`
-  ejecuta `alembic upgrade head` antes de arrancar `uvicorn`, así que una
-  base de datos nueva (por ejemplo en Railway) se migra sola.
+- **Auth**: JWT (`python-jose`) con contraseñas en bcrypt. El campo `role` en
+  `User` admite `owner` / `team` / `gestor` / `builder`. Las cuentas Builder
+  no se autorregistran: se crean (o se convierte una existente) con
+  `python scripts/create_builder_user.py correo contraseña ["Nombre"]`. La
+  dependencia `get_current_builder` (`core/deps.py`) exige `role == builder`
+  en todos los endpoints de `/api/builder/*`.
+- **Cola de revisión** (`DocumentoPendiente` / `api/documents.py` +
+  `api/builder.py`): `POST /api/documents/upload` analiza el archivo en el
+  momento (mismo motor de OCR/analizador de antes) pero **no** devuelve nada
+  al usuario — solo un mensaje de confirmación — y guarda el archivo
+  (`LargeBinary`, en la propia Postgres) y el resultado del análisis
+  (`datos_extraidos`, JSON) con `estado="pendiente"`. Un Builder los lista,
+  descarga el archivo (`/queue/{id}/file`) y aprueba con los datos corregidos
+  (`AprobarDocumentoIn`, con `emisor`/`receptor` genéricos que se traducen a
+  los campos de `Invoice` o `Expense` según `tipo`). Al aprobar o rechazar se
+  pone `archivo = None` (se borra) y se guarda quién y cuándo revisó. Los
+  límites del análisis en sí (varios tipos de IVA, imágenes borrosas...)
+  siguen aplicando — ver "Lectura de facturas (OCR)".
+- **Migraciones**: Alembic, con una migración baseline (`esquema inicial`)
+  que crea las tablas desde cero. El `Dockerfile` ejecuta `alembic upgrade
+  head` antes de arrancar `uvicorn`, así que una base de datos nueva (por
+  ejemplo en Railway) se migra sola. Añadir un valor a un `Enum` de Python
+  (como `builder` a `RoleEnum`) no lo detecta el autogenerate de Alembic: hay
+  que añadir a mano `op.execute("ALTER TYPE roleenum ADD VALUE IF NOT EXISTS
+  '...'")`, cosa que Postgres permite dentro de una transacción desde la v12
+  siempre que no se use ese valor en la misma migración.
 
 **Frontend** (`frontend/src/`):
 
@@ -172,14 +208,23 @@ src/
 ├── utils/nif.js           Validación del dígito de control de NIF/CIF/NIE
 └── pages/
     ├── Home.jsx
-    ├── Login.jsx          Login y registro (pestañas)
+    ├── LoginScreen.jsx         Pantalla inicial: Login + botón "Builder"
+    ├── Login.jsx               Formulario de login y registro (pestañas)
+    ├── BuilderLoginScreen.jsx  Login aparte; rechaza si la cuenta no es Builder
+    ├── BuilderQueuePage.jsx    (Builder) cola de documentos por estado
+    ├── BuilderReviewPage.jsx   (Builder) ver archivo, corregir datos, aprobar/rechazar
     ├── UserPage.jsx       Datos del usuario y cuota de autónomos
     ├── AccesoPage.jsx     (dueño) invitaciones y accesos de gestores
     ├── ClientesPage.jsx   (gestor) canjear códigos y elegir cliente
-    ├── DocumentsPage.jsx  Alta de ingresos/gastos + listados
+    ├── DocumentsPage.jsx  Alta de ingresos/gastos + listados + enviar factura a revisión
     ├── TaxesPage.jsx      IVA + modelo 130 por año/trimestre
     └── RentaPage.jsx      Modelo 130 (x4) + modelo 100 por año
 ```
+
+`App.jsx` decide qué mostrar según haya o no token y el `role` del perfil: sin
+token, solo las pantallas de login (normal o Builder, según la ruta); con
+token y `role === "builder"`, la cola de revisión (sin acceso al resto de la
+app); en cualquier otro caso, la aplicación normal de siempre.
 
 Sin Redux ni librería de estado: cada página pide sus datos con `axios` al
 montar y guarda el resultado en `useState`. El token JWT vive en
@@ -211,6 +256,19 @@ uvicorn app.main:app --reload    # http://localhost:8000
 ```
 
 Documentación interactiva de la API: http://localhost:8000/docs
+
+### Usuarios de ejemplo (solo local)
+
+```bash
+python scripts/create_demo_user.py                                    # usuario normal
+python scripts/create_builder_user.py builder@example.com builder1234 "Builder Demo"
+```
+
+- **Usuario**: `demo@example.com` / `demo1234`
+- **Builder**: `builder@example.com` / `builder1234`
+
+Son para desarrollar en local. No los crees así en un despliegue real: cambia
+la contraseña o usa otro correo.
 
 ### OCR en local (Tesseract)
 
@@ -383,9 +441,11 @@ Fuentes: [Formatos electrónicos de los libros registro (AEAT, PDF)](https://sed
 
 ## Lectura de facturas (OCR)
 
-`POST /api/documents/extract` recibe un archivo y devuelve **propuestas** de
-campos; no guarda nada (ni el archivo ni el documento). La lectura se hace en
-tu propio servidor: las facturas no se envían a servicios de terceros.
+Este es el motor que analiza el PDF/imagen (`ocr.py` + `invoice_parser.py`).
+Desde que existe la cola de revisión (siguiente sección), su resultado ya no
+se le muestra al usuario: es el borrador con el que arranca un Builder. La
+lectura se hace en tu propio servidor: las facturas no se envían a servicios
+de terceros.
 
 **Cómo funciona**
 1. `ocr.py` detecta el tipo por el contenido del archivo. Un **PDF con texto**
@@ -403,7 +463,8 @@ tu propio servidor: las facturas no se envían a servicios de terceros.
    acepta la que supera el dígito de control. Se deduce si es **ingreso o
    gasto** comparando con el NIF del usuario. Los importes se cuadran
    (base + IVA − IRPF = total) y cualquier duda sale como **aviso**.
-4. El frontend rellena el formulario y muestra los avisos y el texto leído.
+4. El resultado (campos + avisos) se guarda como JSON junto al archivo, con
+   estado "pendiente", para que lo revise un Builder.
 
 **Precisión medida** (facturas de muestra generadas para las pruebas, en PDF,
 en imagen limpia y en imagen "escaneada" con ruido y giro):
@@ -431,10 +492,59 @@ en imagen limpia y en imagen "escaneada" con ruido y giro):
 - La **categoría** de un gasto no viene en la factura: la escribe el usuario.
 
 **Protecciones**: máximo 8 MB y 3 páginas por archivo, tipo de archivo
-comprobado por su contenido, máximo 20 lecturas cada 10 minutos por usuario
-(en memoria, se reinicia con el servidor) y las cuentas de gestor no pueden
-usarlo. El `Dockerfile` instala Tesseract, así que la imagen es más grande y
-el primer despliegue tarda más.
+comprobado por su contenido, máximo 20 subidas cada 10 minutos por usuario
+(en memoria, se reinicia con el servidor) y las cuentas de gestor y Builder no
+pueden subir documentos. El `Dockerfile` instala Tesseract, así que la imagen
+es más grande y el primer despliegue tarda más.
+
+## Cola de revisión (rol Builder)
+
+Por qué existe: el analizador de arriba es bueno pero no perfecto (ver su
+precisión medida), y un dato mal leído en una factura es un problema real
+(declaraciones de impuestos). Se decidió que, en vez de que cada usuario
+revise su propia factura, lo haga alguien del equipo antes de que entre en la
+contabilidad de nadie.
+
+**Flujo**
+1. El usuario sube el archivo en Documentos, eligiendo la pestaña
+   Ingreso/Gasto. `POST /api/documents/upload` lo analiza en el momento (no
+   se lo enseña) y lo deja como `DocumentoPendiente` con `estado="pendiente"`.
+   El usuario solo ve un mensaje de confirmación.
+2. Un Builder entra por el botón "Builder" de la pantalla de login (con una
+   cuenta creada por script) y ve `/api/builder/queue`: quién lo subió, tipo,
+   archivo y lo que detectó el analizador.
+3. Abre el documento, ve el archivo original (`/queue/{id}/file`, PDF o
+   imagen) al lado de un formulario precargado con los datos detectados, los
+   corrige si hace falta y pulsa **Aprobar** — se crea la `Invoice` o
+   `Expense` en la cuenta del usuario que lo subió — o **Rechazar** (con un
+   motivo opcional).
+4. Al aprobar o rechazar, el archivo se borra de la base de datos
+   (`archivo = None`); el registro de la revisión (quién, cuándo, con qué
+   datos) se queda.
+
+**Cómo crear una cuenta Builder**: no hay autorregistro, a propósito — es
+personal de confianza con acceso a documentos de todos los usuarios.
+
+```bash
+cd backend
+python scripts/create_builder_user.py correo@ejemplo.com contraseña ["Nombre completo"]
+```
+
+Si el correo ya existe como usuario normal, el script lo convierte en Builder
+(y le cambia la contraseña); si no existe, lo crea.
+
+**Diseño y límites**
+- Guardar el archivo (aunque sea temporalmente, en Postgres) es un cambio de
+  postura respecto a antes: hasta ahora nada se guardaba. Se acotó al mínimo
+  posible — se borra en cuanto se revisa — precisamente por eso.
+- El "menos de 24 h" del mensaje al usuario es una expectativa de servicio,
+  no un temporizador: no hay ningún proceso automático que apruebe nada por
+  sí solo. Si no hay Builders revisando, el documento se queda pendiente.
+- Un Builder ve documentos de **todos** los usuarios, sin restricción por
+  cliente (a diferencia del gestor, que solo ve a quien le ha dado acceso).
+- No hay quien pueda dar de alta a un Builder desde la propia app: es
+  intencional, para que ese acceso no dependa de que la aplicación esté bien
+  o mal configurada.
 
 ## Mantenimiento anual
 
@@ -468,10 +578,28 @@ Matices del cálculo del IRPF que no hay que olvidar al tocarlo:
    resumen. Ver "Gestorías y Administración" para el plan y los campos que
    faltan (IAE, tipo de factura, concepto de gasto).
 3. Mejorar la lectura de facturas (OCR): facturas con varios tipos de IVA
-   (repartirlas en varias líneas), guardar el archivo original (`archivo_url`
-   ya existe en los modelos; requiere almacenamiento persistente en Railway) y
-   probar con facturas reales de usuarios para ampliar las reglas.
-4. Si el proyecto pasa de "feedback con amigos" a uso real con datos
+   (repartirlas en varias líneas) y ampliar las reglas con facturas reales que
+   corrijan los Builders. Ahora que ya se guarda el archivo mientras está
+   pendiente, un buen paso es que la propia cola sirva de conjunto de
+   entrenamiento/prueba.
+4. Contactos recurrentes (clientes/proveedores guardados): al crear un
+   ingreso o gasto, elegir un contacto ya dado de alta para que rellene
+   nombre y NIF solos y solo haga falta cambiar la base imponible.
+5. Cuando haya volumen, dar a los Builders alguna manera de repartirse la
+   cola (asignarse un documento) para no revisarlo dos personas a la vez, y
+   quizás avisar al usuario si su documento se rechaza (hoy el rechazo no le
+   llega, solo queda en el `estado` del documento).
+6. Si el proyecto pasa de "feedback con amigos" a uso real con datos
    sensibles de terceros, valorar cifrado de extremo a extremo para que
    ni con acceso a la base de datos se puedan leer los documentos de cada
    usuario.
+7. Verificar el correo al registrarse (correo de confirmación con enlace/
+   código). Hoy `POST /api/auth/register` no comprueba que el correo exista
+   ni que sea del que se registra, así que cualquiera puede darse de alta con
+   un correo ajeno. Hace falta un proveedor de envío de correo (SMTP, o un
+   servicio como Postmark/Resend/SES) y una plantilla en castellano.
+8. Autenticación en dos pasos (2FA), sobre todo para las cuentas Builder
+   (tienen acceso a documentos de todos los usuarios) y recomendable también
+   para cuentas normales. Lo habitual es TOTP (Google Authenticator/Authy) o
+   un código por correo/SMS; requiere guardar un secreto por usuario y un
+   paso extra en el login.

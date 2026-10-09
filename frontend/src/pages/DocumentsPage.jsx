@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../api/client";
 import { nifAviso } from "../utils/nif";
 
@@ -49,14 +49,22 @@ function EnviarFactura({ tipo }) {
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
   const [error, setError] = useState(null);
+  const camaraRef = useRef(null);
+
+  const elegirArchivo = (file) => {
+    if (!file) return;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      setError(`El archivo supera los ${MAX_MB} MB.`);
+      return;
+    }
+    setError(null);
+    setMensaje(null);
+    setArchivo(file);
+  };
 
   const enviar = async (e) => {
     e.preventDefault();
     if (!archivo) return;
-    if (archivo.size > MAX_MB * 1024 * 1024) {
-      setError(`El archivo supera los ${MAX_MB} MB.`);
-      return;
-    }
     setError(null);
     setMensaje(null);
     setEnviando(true);
@@ -86,17 +94,36 @@ function EnviarFactura({ tipo }) {
         <input
           type="file"
           accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,application/pdf,image/*"
-          onChange={(e) => {
-            setArchivo(e.target.files[0] || null);
-            setMensaje(null);
-          }}
+          onChange={(e) => elegirArchivo(e.target.files[0])}
           disabled={enviando}
           style={{ width: "auto", flex: 1, minWidth: 0 }}
+        />
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => camaraRef.current?.click()}
+          disabled={enviando}
+          style={{ whiteSpace: "nowrap" }}
+        >
+          Hacer foto
+        </button>
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          ref={camaraRef}
+          onChange={(e) => elegirArchivo(e.target.files[0])}
+          disabled={enviando}
+          style={{ display: "none" }}
         />
         <button type="submit" disabled={!archivo || enviando} style={{ whiteSpace: "nowrap" }}>
           {enviando ? "Enviando..." : "Enviar"}
         </button>
       </div>
+      <small className="muted" style={{ display: "block", marginTop: -8, marginBottom: 10 }}>
+        "Hacer foto" solo funciona en móvil o tablet.
+      </small>
+      {archivo && <p className="muted">Archivo elegido: {archivo.name}</p>}
       {mensaje && <p style={{ color: "#15803d" }}>{mensaje}</p>}
       {error && <p className="error">Error: {String(error)}</p>}
     </form>

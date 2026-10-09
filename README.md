@@ -419,6 +419,11 @@ Extensiones recomendadas: Python, Pylance, ESLint, Prettier.
 3. Una vez tengas la URL del frontend (p.ej. `https://finanzas.vercel.app`),
    vuelve al backend en Railway y pon
    `CORS_ORIGINS=https://finanzas.vercel.app`.
+4. `frontend/vercel.json` ya incluye un *rewrite* a `/index.html` para todas
+   las rutas. Es necesario porque Vercel sirve archivos estáticos: sin esto,
+   abrir una ruta de React Router directamente (como el enlace
+   `/verificar?token=...` del correo de confirmación) da 404, aunque la
+   navegación interna dentro de la app funcione bien.
 
 ### 3. Cómo lo usan tus amigos
 

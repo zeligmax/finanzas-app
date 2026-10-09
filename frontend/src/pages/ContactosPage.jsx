@@ -43,7 +43,12 @@ function ContactoForm({ tipo, initial, onSaved, onCancel }) {
       </div>
       <div className="field">
         <label>Dirección</label>
-        <input value={form.direccion} onChange={set("direccion")} placeholder="Calle, número, código postal, ciudad" />
+        <textarea
+          value={form.direccion}
+          onChange={set("direccion")}
+          rows={3}
+          placeholder={"Calle, número\nCódigo postal\nCiudad / provincia"}
+        />
       </div>
       <div className="form-actions">
         <button type="submit" disabled={saving}>
@@ -140,7 +145,7 @@ export default function ContactosPage() {
                 <tr key={c.id} className={editando?.id === c.id ? "editing" : undefined}>
                   <td>{c.nombre}</td>
                   <td>{c.nif || "—"}</td>
-                  <td>{c.direccion || "—"}</td>
+                  <td style={{ whiteSpace: "pre-line" }}>{c.direccion || "—"}</td>
                   <td>
                     <div className="actions">
                       <button type="button" className="secondary small" onClick={() => setEditando(c)}>

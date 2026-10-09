@@ -79,6 +79,12 @@ anual) para autónomos en España.
     un correo con un enlace de confirmación (vía Resend). Mientras no se
     confirme, la cuenta funciona igual (no se bloquea el acceso) pero sale un
     aviso con un botón para reenviar el correo. Ver "Verificación de correo".
+15. **Direcciones en varias líneas**: la dirección de un contacto, la
+    dirección fiscal del usuario y las direcciones de pagador/cobrador al
+    crear un ingreso son ahora un `<textarea>` en vez de una sola línea
+    (p. ej. calle, código postal y ciudad en líneas separadas). Se guarda tal
+    cual en la base de datos; el PDF de factura y el listado de Contactos
+    respetan los saltos de línea al mostrarla.
 
 ## Cómo funciona el proyecto
 

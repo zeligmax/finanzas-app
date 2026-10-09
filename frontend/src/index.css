@@ -155,7 +155,8 @@ tr.editing {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--color-border);
@@ -163,10 +164,16 @@ select {
   background: var(--color-surface);
   color: var(--color-text);
   font-size: 14px;
+  font-family: inherit;
+}
+
+textarea {
+  resize: vertical;
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }

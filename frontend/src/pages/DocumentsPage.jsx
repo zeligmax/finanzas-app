@@ -253,7 +253,7 @@ function InvoiceForm({ initial, perfil, onSaved, onCancel }) {
         <input value={form.cliente_nif} onChange={set("cliente_nif")} />
       </Field>
       <Field label="Dirección pagador">
-        <input value={form.cliente_direccion} onChange={set("cliente_direccion")} />
+        <textarea value={form.cliente_direccion} onChange={set("cliente_direccion")} rows={3} />
       </Field>
 
       <Field label="Nombre cobrador (emisor)">
@@ -263,7 +263,7 @@ function InvoiceForm({ initial, perfil, onSaved, onCancel }) {
         <input value={form.emisor_nif} onChange={set("emisor_nif")} />
       </Field>
       <Field label="Dirección cobrador">
-        <input value={form.emisor_direccion} onChange={set("emisor_direccion")} />
+        <textarea value={form.emisor_direccion} onChange={set("emisor_direccion")} rows={3} />
       </Field>
 
       <Field label="Base imponible (€)">

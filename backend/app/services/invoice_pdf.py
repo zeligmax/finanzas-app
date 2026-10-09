@@ -32,7 +32,7 @@ def _bloque_parte(etiqueta: str, nombre: str, nif: str | None, direccion: str | 
     if nif:
         lineas.append(Paragraph(f"NIF/CIF: {nif}", _BLOQUE))
     if direccion:
-        lineas.append(Paragraph(direccion, _BLOQUE))
+        lineas.append(Paragraph(direccion.replace("\n", "<br/>"), _BLOQUE))
     return lineas
 
 

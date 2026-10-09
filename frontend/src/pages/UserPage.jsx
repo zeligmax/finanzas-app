@@ -76,10 +76,11 @@ export default function UserPage() {
 
           <div className="field">
             <label>Dirección fiscal</label>
-            <input
+            <textarea
               value={form.direccion}
               onChange={set("direccion")}
-              placeholder="Calle, número, código postal, ciudad"
+              rows={3}
+              placeholder={"Calle, número\nCódigo postal\nCiudad / provincia"}
             />
             <small className="muted">Se usa para precargar el emisor al crear una factura nueva.</small>
           </div>

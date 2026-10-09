@@ -15,3 +15,4 @@ class UserProfileOut(UserProfileUpdate):
 
     email: str
     role: str
+    email_verificado: bool

@@ -12,4 +12,5 @@ pytesseract==0.3.13
 pypdfium2==5.13.0
 Pillow==12.0.0
 reportlab==5.0.1
+resend==2.49.1
 pytest==8.3.3

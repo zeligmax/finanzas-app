@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     # Ruta al ejecutable de Tesseract si no está en el PATH (por ejemplo en Windows).
     TESSERACT_CMD: str = ""
 
+    # Verificación de correo (Resend). Sin RESEND_API_KEY no se envía nada: el registro
+    # funciona igual, pero el correo de verificación se salta (se avisa en el log).
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "onboarding@resend.dev"  # remitente de pruebas de Resend; cambiar al verificar un dominio propio
+    FRONTEND_URL: str = "http://localhost:5173"  # para construir el enlace del correo de verificación
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]

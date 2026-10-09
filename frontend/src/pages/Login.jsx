@@ -122,6 +122,7 @@ export default function Login({ onLogin }) {
 
       <p className="muted" style={{ marginTop: 12 }}>
         Tus facturas y gastos solo los ves tú, salvo que des acceso de lectura a tu gestor.
+        {mode === "register" && " Al crear la cuenta te enviamos un correo para confirmarla."}
       </p>
     </div>
   );

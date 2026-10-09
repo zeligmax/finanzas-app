@@ -9,10 +9,48 @@ import AccesoPage from "./pages/AccesoPage";
 import ClientesPage from "./pages/ClientesPage";
 import ContactosPage from "./pages/ContactosPage";
 import LoginScreen from "./pages/LoginScreen";
+import VerificarPage from "./pages/VerificarPage";
 import BuilderLoginScreen from "./pages/BuilderLoginScreen";
 import BuilderQueuePage from "./pages/BuilderQueuePage";
 import BuilderReviewPage from "./pages/BuilderReviewPage";
 import Home from "./pages/Home";
+
+function AvisoVerificacion({ perfil }) {
+  const [enviando, setEnviando] = useState(false);
+  const [mensaje, setMensaje] = useState(null);
+  const [error, setError] = useState(null);
+
+  if (!perfil || perfil.email_verificado) return null;
+
+  const reenviar = async () => {
+    setEnviando(true);
+    setError(null);
+    setMensaje(null);
+    try {
+      const res = await api.post("/api/auth/resend-verification");
+      setMensaje(res.data.mensaje);
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <div className="banner">
+      Todavía no has confirmado tu correo ({perfil.email}).{" "}
+      <button type="button" className="secondary small" onClick={reenviar} disabled={enviando}>
+        {enviando ? "Enviando..." : "Reenviar correo"}
+      </button>
+      {mensaje && <span style={{ marginLeft: 8, color: "#15803d" }}>{mensaje}</span>}
+      {error && (
+        <span className="error" style={{ marginLeft: 8 }}>
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
@@ -90,6 +128,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/verificar" element={<VerificarPage />} />
+
         {!token && (
           <>
             <Route path="/builder-login" element={<BuilderLoginScreen onLogin={handleLogin} />} />
@@ -184,6 +224,7 @@ export default function App() {
                   </nav>
                 </header>
                 <main>
+                  <AvisoVerificacion perfil={perfil} />
                   <Routes>
                     <Route path="/" element={<Home />} />
                     <Route path="/documents" element={datos(<DocumentsPage soloLectura={esGestor} perfil={perfil} />)} />

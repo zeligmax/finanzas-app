@@ -71,6 +71,14 @@ anual) para autónomos en España.
     campo de dirección fiscal que precarga el emisor al crear una factura
     nueva. No se generan PDF de gastos: son facturas que recibes, no que
     emites.
+13. **Botón "Hacer foto" en Documentos**: además de elegir un archivo,
+    `capture="environment"` abre la cámara trasera directamente en móvil o
+    tablet (con una nota de que ese botón es solo para eso). En ordenador no
+    hace nada especial, solo abre el selector de archivos normal.
+14. **Verificación de correo al registrarse**: al crear una cuenta se envía
+    un correo con un enlace de confirmación (vía Resend). Mientras no se
+    confirme, la cuenta funciona igual (no se bloquea el acceso) pero sale un
+    aviso con un botón para reenviar el correo. Ver "Verificación de correo".
 
 ## Cómo funciona el proyecto
 
@@ -81,16 +89,21 @@ anual) para autónomos en España.
   cuentas de personal interno (ver más abajo). Con una cuenta normal, todo
   sigue igual que siempre.
 - **Login / Crear cuenta**: cualquiera puede registrarse con su correo y
-  contraseña. No hace falta invitación ni aprobación.
+  contraseña. No hace falta invitación ni aprobación. Al crear la cuenta se
+  envía un correo para confirmarla; mientras no la confirmes sigues
+  entrando igual, pero verás un aviso arriba con un botón para reenviar el
+  correo. Ver "Verificación de correo".
 - **Documentos**: pestañas "Ingreso" (una factura que emites y cobras) y
   "Gasto" (una factura que recibes y pagas). Cada uno queda en su propio
   listado, desde donde puedes editarlo o borrarlo. Encima hay "Enviar una
   factura": subes un PDF o una imagen (hasta 8 MB) y ya está — no ves ningún
-  dato al momento, solo un mensaje de confirmación. Una persona (Builder) la
-  revisa y, en menos de 24 h, la factura o el gasto aparece solo en tu cuenta.
-  Al crear un ingreso o un gasto puedes elegir un contacto guardado (ver
-  Contactos) para rellenar nombre/NIF solo, y cada ingreso tiene un botón
-  "PDF" para descargar la factura y enviársela al cliente.
+  dato al momento, solo un mensaje de confirmación. En móvil o tablet sale
+  también un botón "Hacer foto" que abre la cámara directamente. Una persona
+  (Builder) la revisa y, en menos de 24 h, la factura o el gasto aparece
+  solo en tu cuenta. Al crear un ingreso o un gasto puedes elegir un
+  contacto guardado (ver Contactos) para rellenar nombre/NIF solo, y cada
+  ingreso tiene un botón "PDF" para descargar la factura y enviársela al
+  cliente.
 - **Contactos**: clientes y proveedores que guardas una vez (nombre, NIF,
   dirección) para no volver a teclearlos cada vez.
 - **Usuario**: tu nombre, NIF/CIF, dirección fiscal (se usa para precargar el
@@ -134,7 +147,7 @@ app/
 ├── models/models.py      User, Invoice, Expense, Contacto, GestorAccess, DocumentoPendiente (SQLAlchemy)
 ├── schemas/               Pydantic: Invoice, Expense, Contacto, perfil de usuario, cola de Builder
 ├── api/
-│   ├── auth.py           /api/auth/login, /register
+│   ├── auth.py           /api/auth/login, /register, /verify/{token}, /resend-verification
 │   ├── users.py          /api/users/me (perfil: nombre, NIF/CIF, dirección, cuota de autónomos)
 │   ├── access.py         /api/access (invitaciones del dueño) y /api/gestor (canje y clientes)
 │   ├── contactos.py      /api/contactos/ (clientes/proveedores guardados, CRUD por owner_id)
@@ -148,7 +161,8 @@ app/
 │   ├── ocr.py             Lee PDF (capa de texto) e imágenes (Tesseract) y devuelve texto
 │   ├── invoice_parser.py  Texto de una factura -> campos (número, fecha, NIF, importes...)
 │   ├── invoice_pdf.py     Genera el PDF de un ingreso con reportlab (sin dependencias del sistema)
-│   └── nif.py             Validación del dígito de control de NIF/CIF/NIE
+│   ├── nif.py             Validación del dígito de control de NIF/CIF/NIE
+│   └── email.py           Envío del correo de verificación con Resend (ver "Verificación de correo")
 └── tests/                 Tests del motor fiscal y del analizador de facturas
 ```
 
@@ -227,6 +241,21 @@ app/
   que añadir a mano `op.execute("ALTER TYPE roleenum ADD VALUE IF NOT EXISTS
   '...'")`, cosa que Postgres permite dentro de una transacción desde la v12
   siempre que no se use ese valor en la misma migración.
+- **Verificación de correo** (`services/email.py` + `api/auth.py`): `User`
+  tiene `email_verificado` (bool), `verificacion_codigo` (token aleatorio,
+  `secrets.token_urlsafe(32)`) y `verificacion_expira` (48 h). Al
+  registrarse se manda un correo con un enlace a
+  `{FRONTEND_URL}/verificar?token=...`; `GET /api/auth/verify/{token}` lo
+  valida y borra el código (de un solo uso). No confirmar el correo **no**
+  bloquea el login — solo muestra un aviso en la app con
+  `POST /api/auth/resend-verification` (con un cooldown de 60 s para evitar
+  abuso). El envío usa [Resend](https://resend.com) (`RESEND_API_KEY`); si
+  no está configurada, el registro funciona igual pero no se manda correo
+  (queda en el log como aviso, no como error). **Límite del modo sandbox**:
+  sin un dominio propio verificado en Resend, solo se pueden enviar correos
+  a la dirección de la cuenta de Resend — para que llegue a cualquier
+  usuario real hace falta verificar un dominio propio (ver su panel,
+  Domains).
 
 **Frontend** (`frontend/src/`):
 
@@ -242,6 +271,7 @@ src/
     ├── Home.jsx
     ├── LoginScreen.jsx         Pantalla inicial: Login + botón "Builder"
     ├── Login.jsx               Formulario de login y registro (pestañas)
+    ├── VerificarPage.jsx       Página pública /verificar?token=... (confirma el correo)
     ├── BuilderLoginScreen.jsx  Login aparte; rechaza si la cuenta no es Builder
     ├── BuilderQueuePage.jsx    (Builder) cola de documentos por estado
     ├── BuilderReviewPage.jsx   (Builder) ver archivo, corregir datos, aprobar/rechazar
@@ -364,6 +394,13 @@ Extensiones recomendadas: Python, Pylance, ESLint, Prettier.
    - `CORS_ORIGINS` → la URL del frontend una vez la tengas (paso
      siguiente); de momento puedes poner `*` temporalmente y ajustarlo
      después.
+   - `FRONTEND_URL` → la misma URL del frontend (paso siguiente); se usa
+     para construir el enlace del correo de verificación
+     (`{FRONTEND_URL}/verificar?token=...`).
+   - `RESEND_API_KEY` y `EMAIL_FROM` (opcionales) → para que se envíe el
+     correo de verificación al registrarse (ver "Verificación de correo").
+     Sin `RESEND_API_KEY`, el registro funciona igual pero no se manda
+     correo.
 5. Deploy. Al arrancar, el contenedor ejecuta `alembic upgrade head` solo
    (ya lo dejé configurado) — crea las tablas automáticamente en la base
    de datos nueva. Verifica en los logs que dice
@@ -623,11 +660,10 @@ Matices del cálculo del IRPF que no hay que olvidar al tocarlo:
    sensibles de terceros, valorar cifrado de extremo a extremo para que
    ni con acceso a la base de datos se puedan leer los documentos de cada
    usuario.
-6. Verificar el correo al registrarse (correo de confirmación con enlace/
-   código). Hoy `POST /api/auth/register` no comprueba que el correo exista
-   ni que sea del que se registra, así que cualquiera puede darse de alta con
-   un correo ajeno. Hace falta un proveedor de envío de correo (SMTP, o un
-   servicio como Postmark/Resend/SES) y una plantilla en castellano.
+6. Verificar un dominio propio en Resend (hoy se usa su dominio de pruebas,
+   `onboarding@resend.dev`, que solo puede enviar a la dirección de la propia
+   cuenta de Resend). Con un dominio verificado (unos registros DNS) los
+   correos de confirmación llegan a cualquier usuario real, no solo a ti.
 7. Autenticación en dos pasos (2FA), sobre todo para las cuentas Builder
    (tienen acceso a documentos de todos los usuarios) y recomendable también
    para cuentas normales. Lo habitual es TOTP (Google Authenticator/Authy) o

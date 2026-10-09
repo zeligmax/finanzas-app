@@ -29,6 +29,10 @@ class User(Base):
     role = Column(Enum(RoleEnum), default=RoleEnum.team, nullable=False)
     is_active = Column(Boolean, default=True)
 
+    email_verificado = Column(Boolean, nullable=False, default=False, server_default="false")
+    verificacion_codigo = Column(String, nullable=True)  # se borra una vez verificado
+    verificacion_expira = Column(DateTime, nullable=True)
+
 
 class GestorAccess(Base):
     """
